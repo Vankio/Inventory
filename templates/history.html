@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}История изменений - {{ equipment_type }} (ID: {{ equipment_id }}){% endblock %}
+
+{% block content %}
+        <div class="header">
+            <div class="breadcrumb">
+                <a href="{{ url_for('index') }}">/</a>
+                <a href="{{ url_for('category_view', category=equipment_type) }}">{{ equipment_type }}</a>
+                <span>История изменений</span>
+            </div>
+            <div class="header-buttons">
+                {% if user_session %}
+                <a href="{{ url_for('edit_equipment', id=equipment_id) }}" class="btn-edit">
+                    <span>✏️</span>
+                    <span>Редактировать</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="category-content">
+            <h1>История изменений для {{ equipment_type }} "{{ equipment_name }}" (ID: {{ equipment_id }})</h1>
+            {% if equipment_inv_number %}
+                <p>Инвентарный номер: {{ equipment_inv_number }}</p>
+            {% endif %}
+
+            {% if history %}
+                <table class="equipment-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Поле</th>
+                            <th>Старое значение</th>
+                            <th>Новое значение</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in history %}
+                        <tr data-history-id="{{ record.id }}">
+                            <td>{{ record.change_date | format_datetime }}</td>
+                            <td>{{ record.field_name }}</td>
+                            <td>
+                                {% if record.field_name == 'Детали' %}
+                                    <pre>{{ record.old_value | format_details }}</pre>
+                                {% else %}
+                                    {{ record.old_value if record.old_value else '-' }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.field_name == 'Детали' %}
+                                    <pre>{{ record.new_value | format_details }}</pre>
+                                {% else %}
+                                    {{ record.new_value if record.new_value else '-' }}
+                                {% endif %}
+                            </td>
+                            <td class="comment-cell">
+                                <div class="comment-editor">
+                                    <input type="text" class="comment-input" value="{{ record.comment if record.comment else '' }}" placeholder="Добавить комментарий">
+                                    <button class="save-comment-btn">Сохранить</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Нет записей об изменениях для этого элемента.</p>
+            {% endif %}
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Открываем подменю если текущая категория является компонентом
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if equipment_type in equipment_fields.get('Компьютеры', {}).get('components', []) %}
+            const submenu = document.getElementById('components-submenu');
+            const toggle = document.getElementById('components-menu-toggle');
+            const arrow = toggle.querySelector('.nav-arrow');
+            if (submenu && !submenu.classList.contains('active')) {
+                submenu.classList.add('active');
+                arrow.classList.add('rotated');
+            }
+        {% endif %}
+
+        document.querySelectorAll('.comment-editor').forEach(editor => {
+            const commentInput = editor.querySelector('.comment-input');
+            const saveButton = editor.querySelector('.save-comment-btn');
+            const historyId = editor.closest('tr').dataset.historyId; // Получаем historyId из родительской строки
+
+            saveButton.addEventListener('click', () => {
+                const newComment = commentInput.value;
+                
+                fetch(`/update_history_comment/${historyId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ comment: newComment })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Комментарий обновлен');
+                        // Можно добавить визуальную обратную связь, например, временное изменение цвета кнопки
+                    } else {
+                        alert('Ошибка при сохранении комментария');
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    alert('Ошибка сети или сервера при сохранении комментария');
+                });
+            });
+
+            commentInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    saveButton.click(); // Имитируем нажатие кнопки "Сохранить"
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

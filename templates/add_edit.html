@@ -1,0 +1,769 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Редактировать оборудование{% else %}Добавить оборудование{% endif %}{% endblock %}
+
+{% block content %}
+        <div class="header">
+            <div class="breadcrumb">
+                <a href="{{ url_for('index') }}">/</a>
+                <span>Добавить оборудование</span>
+            </div>
+        </div>
+
+        <div class="category-content">
+            <h1>{% if is_edit %}Редактировать оборудование{% else %}Добавить оборудование{% endif %}</h1>
+            <form method="post" class="equipment-form" id="equipmentForm" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="redirect_category" id="redirectCategory" value="{{ pre_selected_type or (edit_item.type if edit_item else '') }}">
+                <input type="hidden" name="pre_selected_type" value="{{ pre_selected_type or (edit_item.type if edit_item else '') }}">
+                {% if is_edit and edit_item %}
+                <input type="hidden" name="item_id" value="{{ edit_item.id }}">
+                {% endif %}
+                
+                <div class="form-group">
+                    <label for="type">Тип оборудования:</label>
+                    <select name="type" id="type" required onchange="updateFormFields()">
+            <option value="">--Выберите--</option>
+                        {% for key in equipment_types.keys() %}
+                        <option value="{{ key }}" {% if (pre_selected_type == key) or (is_edit and edit_item and edit_item.type == key) %}selected{% endif %}>{{ key }}</option>
+            {% endfor %}
+        </select>
+                </div>
+
+                <div id="dynamicFields"></div>
+                <div class="form-group">
+                    <label for="inventory_number">Инвентарный номер:</label>
+                    <input type="text" name="inventory_number" id="inventory_number" placeholder="Введите инвентарный номер" value="{{ edit_item.inventory_number if is_edit and edit_item else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="price">Стоимость:</label>
+                    <input type="number" step="0.01" name="price" id="price" placeholder="Введите стоимость" value="{{ edit_item.price if is_edit and edit_item.price is not none else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="department">Отдел:</label>
+                    <select name="department" id="department">
+                        <option value="">--Выберите отдел--</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept }}" {% if is_edit and edit_item and edit_item.department == dept %}selected{% endif %}>{{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="status">Статус:</label>
+                    <select name="status" id="status" required>
+                        {% if is_edit and edit_item %}
+                            {% for status in equipment_types[edit_item.type].statuses %}
+                            <option value="{{ status }}" {% if edit_item.status == status %}selected{% endif %}>{{ status }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="Установленные">Установленные</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="pdf_file">PDF-файл:</label>
+                    <input type="file" name="pdf_file" id="pdf_file" accept=".pdf">
+                    {% if is_edit and edit_item and edit_item.pdf_path %}
+                        <p>Текущий файл: <a href="{{ url_for('static', filename=edit_item.pdf_path) }}" target="_blank">{{ edit_item.pdf_path.split('/')[-1] }}</a></p>
+                        <input type="hidden" name="existing_pdf_path" value="{{ edit_item.pdf_path }}">
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="comment">Комментарий:</label>
+                    <textarea name="comment" id="comment" placeholder="Введите комментарий">{{ edit_item.comment if is_edit and edit_item else '' }}</textarea>
+                </div>
+ 
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                    <a href="{% if pre_selected_type %}{{ url_for('category_view', category=pre_selected_type) }}{% else %}{{ url_for('index') }}{% endif %}" class="btn-secondary">Отмена</a>
+                </div>
+    </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно для ручного ввода комплектующих -->
+    <div id="manualComponentsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Вписать комплектующие</h2>
+                <button type="button" class="modal-close" onclick="closeManualComponentsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="manualComponentsForm">
+                <!-- Поля для ручного ввода будут генерироваться здесь -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeManualComponentsModal()">Отмена</button>
+                <button type="button" class="btn-primary" onclick="saveManualComponents()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора комплектующих -->
+    <div id="componentsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Выбор комплектующих</h2>
+                <button type="button" class="modal-close" onclick="closeComponentsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="componentsModalBody">
+                <!-- Компоненты будут загружены динамически -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeComponentsModal()">Отмена</button>
+                <button type="button" class="btn-primary" onclick="saveComponents()">Сохранить</button>
+            </div>
+        </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const equipmentTypes = {{ equipment_types|tojson }};
+    const equipmentFields = {{ equipment_fields|tojson }};
+    const preSelectedType = {{ pre_selected_type|tojson if pre_selected_type else 'null' }};
+    const editItem = {{ edit_item|tojson if is_edit and edit_item else 'null' }};
+    const isEdit = {{ 'true' if is_edit else 'false' }};
+    
+    // Поля для перевода на русский
+    const fieldLabels = {
+        'name': 'Название',
+        'model': 'Модель',
+        'diagonal': 'Диагональ (дюймы)',
+        'resolution': 'Разрешение',
+        'frequency': 'Частота (ГГц)',
+        'cores': 'Количество ядер',
+        'capacity': 'Объем',
+        'type': 'Тип',
+        'socket': 'Сокет',
+        'memory': 'Память (ГБ)',
+        'form_factor': 'Форм-фактор',
+        'power': 'Мощность (Вт)'
+    };
+    
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        // Сначала вызываем updateFormFields, чтобы создать все нужные поля
+        if (isEdit && editItem) {
+            document.getElementById('redirectCategory').value = editItem.type;
+            updateFormFields(); // Эта функция создаст контейнеры #selectedComponents и #manualComponents
+
+            // Теперь, когда все элементы созданы, вызываем функции для их заполнения
+            displayExistingComponents(); // Для компонентов из БД
+            displayExistingManualComponents(); // Для компонентов, введенных вручную
+
+        } else if (preSelectedType) {
+            document.getElementById('redirectCategory').value = preSelectedType;
+            updateFormFields();
+        }
+    });
+    
+    function updateStatusOptions() {
+        const typeSelect = document.getElementById('type');
+        const statusSelect = document.getElementById('status');
+        const selectedType = typeSelect.value;
+        
+        statusSelect.innerHTML = '';
+        
+        if (selectedType && equipmentTypes[selectedType]) {
+            equipmentTypes[selectedType].statuses.forEach(status => {
+                const option = document.createElement('option');
+                option.value = status;
+                option.textContent = status;
+                if (selectedType === 'Компьютеры' && status === 'Установленные') {
+                    option.selected = true;
+                } else if (selectedType !== 'Компьютеры' && status === 'Резерв') {
+                    option.selected = true;
+                }
+                statusSelect.appendChild(option);
+            });
+        }
+    }
+    
+    function updateFormFields() {
+        const typeSelect = document.getElementById('type');
+        const selectedType = typeSelect.value;
+        const dynamicFields = document.getElementById('dynamicFields');
+        const redirectCategory = document.getElementById('redirectCategory');
+        dynamicFields.innerHTML = '';
+        
+        if (selectedType) {
+            redirectCategory.value = selectedType;
+        }
+        
+        if (!isEdit) {
+            updateStatusOptions();
+        }
+        
+        if (!selectedType || !equipmentFields[selectedType]) {
+            return;
+        }
+        
+        const fieldsConfig = equipmentFields[selectedType];
+        
+        fieldsConfig.fields.forEach(field => {
+           const formGroup = document.createElement('div');
+           formGroup.className = 'form-group';
+           
+           const label = fieldLabels[field] || field;
+           // Заполняем значение только если мы не меняем тип в режиме редактирования
+           const value = (isEdit && editItem && editItem.type === selectedType)
+               ? (field === 'name' ? editItem.name : (editItem.details_parsed ? editItem.details_parsed[field] : ''))
+               : (field === 'name' && isEdit && editItem ? editItem.name : ''); // Сохраняем имя при смене типа
+           const inputName = field === 'type' ? 'component_type' : field;
+
+           let inputHtml = `<label for="${field}">${label}:</label>
+                              <input type="text" name="${inputName}" id="${field}" placeholder="Введите ${label.toLowerCase()}" value="${value || ''}" list="${field}-list" ${(field === 'name' ? 'required' : '')}>
+                              <datalist id="${field}-list"></datalist>`;
+
+            if (selectedType === 'Процессор' && field === 'name') {
+                const nameDatalist = document.getElementById('name-list');
+                if(nameDatalist){
+                    nameDatalist.innerHTML += '<option value="Intel"><option value="AMD">';
+                }
+            }
+           
+           formGroup.innerHTML = inputHtml;
+           dynamicFields.appendChild(formGroup);
+           
+           // Заполняем datalist
+           fetch(`/api/field_values/${field}`)
+               .then(response => response.json())
+               .then(data => {
+                   const datalist = document.getElementById(`${field}-list`);
+                   if (datalist) {
+                       data.forEach(item => {
+                           const option = document.createElement('option');
+                           option.value = item;
+                           datalist.appendChild(option);
+                       });
+                   }
+               });
+       });
+        
+        if (selectedType === 'Компьютеры' && fieldsConfig.needs_components) {
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+            formGroup.innerHTML = `
+                <label>Комплектующие:</label>
+                <div class="button-group">
+                    <button type="button" class="btn-select-components" onclick="openComponentsModal()">
+                        Выбрать комплектующие
+                    </button>
+                    <button type="button" class="btn-select-components" onclick="openManualComponentsModal()">
+                        Вписать комплектующие
+                    </button>
+                </div>
+                <div id="selectedComponents" class="selected-components"></div>
+                <div id="manualComponents" class="manual-components-display">
+                    {% if editItem and editItem.details_parsed and editItem.details_parsed.manual_components %}
+                        <div class="manual-components-edit-wrapper">
+                            <div id="manualComponentsDisplay">{{ formatManualComponents(editItem.details_parsed.manual_components, true) | safe }}</div>
+                            <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
+                        </div>
+                    {% endif %}
+                </div>
+            `;
+            dynamicFields.appendChild(formGroup);
+            
+            if (isEdit && editItem && editItem.details_parsed && editItem.details_parsed.components) {
+                // Немедленно вызываем функцию для отображения и создания скрытых полей
+                displayExistingComponents();
+            }
+        }
+    }
+    
+    function openComponentsModal() {
+        const modal = document.getElementById('componentsModal');
+        const modalBody = document.getElementById('componentsModalBody');
+        modalBody.innerHTML = '<p>Загрузка компонентов...</p>';
+        modal.style.display = 'block';
+        
+        const components = equipmentFields['Компьютеры'].components;
+        let html = '<div class="components-list">';
+        
+        const multipleComponents = equipmentFields['Компьютеры'].multiple_components || [];
+        components.forEach(componentType => {
+            const isMultiple = multipleComponents.includes(componentType);
+            html += `<div class="component-group">
+                <h3>${componentType} ${isMultiple ? '<span class="multiple-indicator">(можно несколько)</span>' : ''}</h3>
+                <div id="component_${componentType}" class="component-select-container">
+                    ${!isMultiple ? '<select class="component-select"><option value="">--Не выбрано--</option></select>' : ''}
+                </div>
+            </div>`;
+        });
+        
+        html += '</div>';
+        modalBody.innerHTML = html;
+        
+        components.forEach(componentType => {
+            // Собираем уже выбранные ID из скрытых инпутов
+            const selectedIds = [];
+            document.querySelectorAll(`input[name="component_${componentType}"]`).forEach(input => {
+                selectedIds.push(input.value);
+            });
+            loadComponents(componentType, selectedIds);
+        });
+    }
+    
+    function loadComponents(componentType, selectedIds = []) {
+        let url = `/api/components/${encodeURIComponent(componentType)}`;
+        const idsToLoad = Array.from(new Set(selectedIds));
+        if (idsToLoad.length > 0) {
+            url += `?component_ids=${JSON.stringify(idsToLoad)}`;
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById(`component_${componentType}`);
+                if (!container) return;
+
+                const isMultiple = (equipmentFields['Компьютеры'].multiple_components || []).includes(componentType);
+                const currentSelectedIds = new Set(selectedIds.map(String));
+
+                container.innerHTML = ''; // Очищаем контейнер
+
+                if (isMultiple) {
+                    data.forEach(comp => {
+                        if (comp.is_installed && !currentSelectedIds.has(String(comp.id))) {
+                            return;
+                        }
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-container';
+                        label.textContent = comp.name + (comp.details ? ` (${comp.details})` : '');
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.value = comp.id;
+                        input.dataset.text = comp.name + (comp.details ? ` (${comp.details})` : '');
+                        input.dataset.details = comp.details || '';
+                         if (currentSelectedIds.has(String(comp.id))) {
+                            input.checked = true;
+                        }
+                        const span = document.createElement('span');
+                        span.className = 'checkmark';
+                        label.appendChild(input);
+                        label.appendChild(span);
+                        container.appendChild(label);
+                    });
+                } else {
+                    const select = document.createElement('select');
+                    select.className = 'component-select';
+                    select.innerHTML = '<option value="">--Не выбрано--</option>';
+                    data.forEach(comp => {
+                        if (comp.is_installed && !currentSelectedIds.has(String(comp.id))) {
+                            return;
+                        }
+                        const option = document.createElement('option');
+                        option.value = comp.id;
+                        option.textContent = comp.name + (comp.details ? ` (${comp.details})` : '');
+                        option.dataset.details = comp.details || '';
+                        if (currentSelectedIds.has(String(comp.id))) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    container.appendChild(select);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки компонентов:', error);
+            });
+    }
+    
+    function closeComponentsModal() {
+        document.getElementById('componentsModal').style.display = 'none';
+    }
+    
+    function displayExistingComponents() {
+        if (!isEdit || !editItem || !editItem.details_parsed || !editItem.details_parsed.formatted_components) {
+            return;
+        }
+
+        const selectedComponentsDiv = document.getElementById('selectedComponents');
+        if (!selectedComponentsDiv) return;
+
+        selectedComponentsDiv.innerHTML = '';
+        document.querySelectorAll('input[name^="component_"]').forEach(input => input.remove());
+        
+        const formattedComponents = editItem.details_parsed.formatted_components;
+
+        for (const compType in formattedComponents) {
+            const components = formattedComponents[compType];
+            components.forEach(comp => {
+                createHiddenComponentInput(compType, comp.id, `${comp.name} (${comp.details})`, comp.details, selectedComponentsDiv, true);
+            });
+        }
+    }
+
+    function displayExistingManualComponents() {
+        if (!isEdit || !editItem || !editItem.details_parsed || !editItem.details_parsed.manual_components) {
+            return;
+        }
+        const manualComponentsData = editItem.details_parsed.manual_components;
+        const manualComponentsDiv = document.getElementById('manualComponents');
+        if (!manualComponentsDiv) return;
+
+        // 1. Создаем скрытое поле
+        let hiddenInput = document.getElementById('manual_components_text_hidden');
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'manual_components_text';
+            hiddenInput.id = 'manual_components_text_hidden';
+            document.getElementById('equipmentForm').appendChild(hiddenInput);
+        }
+        hiddenInput.value = JSON.stringify(manualComponentsData);
+
+        // 2. Создаем отображение
+        const displayText = formatManualComponents(manualComponentsData, true);
+        manualComponentsDiv.innerHTML = `
+            <div class="manual-components-edit-wrapper">
+                <div id="manualComponentsDisplay">${displayText}</div>
+                <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
+            </div>
+        `;
+    }
+    
+    function saveComponents() {
+        const components = equipmentFields['Компьютеры'].components;
+        const multipleComponents = equipmentFields['Компьютеры'].multiple_components || [];
+        const selectedComponentsDiv = document.getElementById('selectedComponents');
+
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем и отображение, и старые инпуты перед добавлением новых.
+        selectedComponentsDiv.innerHTML = '';
+        document.querySelectorAll('input[name^="component_"]').forEach(input => input.remove());
+
+        components.forEach(componentType => {
+            const container = document.getElementById(`component_${componentType}`);
+            const isMultiple = multipleComponents.includes(componentType);
+
+            if (isMultiple) {
+                const checkedBoxes = container.querySelectorAll('input[type="checkbox"]:checked');
+                checkedBoxes.forEach(checkbox => {
+                    createHiddenComponentInput(componentType, checkbox.value, checkbox.dataset.text, checkbox.dataset.details, selectedComponentsDiv, true);
+                });
+            } else {
+                const select = container.querySelector('select');
+                if (select && select.value) {
+                    const selectedOption = select.options[select.selectedIndex];
+                    createHiddenComponentInput(componentType, select.value, selectedOption.text, selectedOption.dataset.details, selectedComponentsDiv, true);
+                }
+            }
+        });
+        closeComponentsModal();
+    }
+
+    function createHiddenComponentInput(componentType, id, text, details, container, createInput = false) {
+        // Создаем скрытое поле, только если это указано (например, при выборе из модального окна)
+        if (createInput) {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = `component_${componentType}`;
+            hiddenInput.value = id;
+            document.getElementById('equipmentForm').appendChild(hiddenInput);
+        }
+
+        // Создаем элемент для отображения
+        const componentDiv = document.createElement('div');
+        componentDiv.className = 'selected-component-item';
+        // Убираем статус "(Установленно)" из отображаемого текста
+        const cleanText = text.replace(/\s\(Установленно\)$/, '');
+        // Теперь `text` уже содержит все детали, так что `detailsText` не нужен.
+        componentDiv.innerHTML = `<span>${componentType}: ${cleanText}</span>`;
+        container.appendChild(componentDiv);
+    }
+    
+    window.onclick = function(event) {
+        const componentsModal = document.getElementById('componentsModal');
+        const manualComponentsModal = document.getElementById('manualComponentsModal');
+        if (event.target === componentsModal) {
+            closeComponentsModal();
+        }
+        if (event.target === manualComponentsModal) {
+            closeManualComponentsModal();
+        }
+    }
+
+    function openManualComponentsModal() {
+        const modal = document.getElementById('manualComponentsModal');
+        const formBody = document.getElementById('manualComponentsForm');
+        formBody.innerHTML = ''; // Очищаем содержимое
+
+        const components = equipmentFields['Компьютеры'].components;
+        const existingData = (isEdit && editItem && editItem.details_parsed && editItem.details_parsed.manual_components) ? editItem.details_parsed.manual_components : {};
+
+        components.forEach(componentType => {
+            const fields = equipmentFields[componentType].fields;
+            let groupHtml = `<div class="component-group" id="manual-group-${componentType.replace(/\s+/g, '_')}"><h3>${componentType}</h3>`;
+
+            if (componentType === 'Хранение данных') {
+                // existingData['Хранение данных'] должен быть массивом
+                const storageData = (existingData[componentType] && Array.isArray(existingData[componentType])) ? existingData[componentType] : [{}];
+                storageData.forEach((storageItem, index) => {
+                    groupHtml += `<div class="storage-entry" data-index="${index}">`;
+                    fields.forEach(field => {
+                        const label = fieldLabels[field] || field;
+                        const value = storageItem[field] || '';
+                        groupHtml += `
+                            <div class="form-group-modal">
+                                <label for="manual_${componentType}_${index}_${field}">${label}</label>
+                                <input type="text" id="manual_${componentType}_${index}_${field}" name="manual_${componentType}_${index}_${field}" value="${value}" placeholder="${label}">
+                            </div>
+                        `;
+                    });
+                    groupHtml += '</div>';
+                });
+                groupHtml += `<button type="button" class="btn-add-storage" onclick="addStorageEntry()">+ Добавить хранение данных</button>`;
+            } else {
+                 fields.forEach(field => {
+                    const label = fieldLabels[field] || field;
+                    // Для остальных компонентов, которые являются объектами
+                    const value = (existingData[componentType] && typeof existingData[componentType] === 'object' && !Array.isArray(existingData[componentType]) && existingData[componentType][field])
+                                  ? existingData[componentType][field]
+                                  : '';
+                    groupHtml += `
+                        <div class="form-group-modal">
+                            <label for="manual_${componentType}_${field}">${label}</label>
+                            <input type="text" id="manual_${componentType}_${field}" name="manual_${componentType}_${field}" value="${value}" placeholder="${label}">
+                        </div>
+                    `;
+                });
+            }
+
+            groupHtml += '</div>';
+            formBody.innerHTML += groupHtml;
+        });
+
+        modal.style.display = 'block';
+    }
+
+    function closeManualComponentsModal() {
+        document.getElementById('manualComponentsModal').style.display = 'none';
+    }
+
+    function addStorageEntry() {
+        const componentType = 'Хранение данных';
+        const container = document.querySelector(`#manual-group-${componentType.replace(/\s+/g, '_')}`);
+        const addButton = container.querySelector('.btn-add-storage');
+        const fields = equipmentFields[componentType].fields;
+        
+        const newIndex = container.querySelectorAll('.storage-entry').length;
+
+        let newEntryHtml = `<div class="storage-entry" data-index="${newIndex}">`;
+        fields.forEach(field => {
+            const label = fieldLabels[field] || field;
+            newEntryHtml += `
+                <div class="form-group-modal">
+                    <label for="manual_${componentType}_${newIndex}_${field}">${label}</label>
+                    <input type="text" id="manual_${componentType}_${newIndex}_${field}" name="manual_${componentType}_${newIndex}_${field}" value="" placeholder="${label}">
+                </div>
+            `;
+        });
+        newEntryHtml += '</div>';
+
+        // Вставляем новый блок перед кнопкой "Добавить"
+        addButton.insertAdjacentHTML('beforebegin', newEntryHtml);
+    }
+
+    function saveManualComponents() {
+        const components = equipmentFields['Компьютеры'].components;
+        const manualComponentsData = {};
+
+        components.forEach(componentType => {
+            if (componentType === 'Хранение данных') {
+                const storageEntries = document.querySelectorAll('.storage-entry');
+                const storageDataArray = [];
+
+                storageEntries.forEach((entry, index) => {
+                    const fields = equipmentFields[componentType].fields;
+                    const storageItemData = {};
+                    let hasThisStorageData = false;
+                    fields.forEach(field => {
+                        const input = document.getElementById(`manual_${componentType}_${index}_${field}`);
+                        if (input && input.value) {
+                            storageItemData[field] = input.value;
+                            hasThisStorageData = true;
+                        }
+                    });
+                    if (hasThisStorageData) {
+                        storageDataArray.push(storageItemData);
+                    }
+                });
+
+                if (storageDataArray.length > 0) {
+                    manualComponentsData[componentType] = storageDataArray;
+                }
+
+            } else {
+                const fields = equipmentFields[componentType].fields;
+                const componentData = {};
+                let componentHasData = false;
+
+                fields.forEach(field => {
+                    const input = document.getElementById(`manual_${componentType}_${field}`);
+                    if (input && input.value) {
+                        componentData[field] = input.value;
+                        componentHasData = true;
+                    }
+                });
+
+                if (componentHasData) {
+                    manualComponentsData[componentType] = componentData;
+                }
+            }
+        });
+
+        let hiddenInput = document.getElementById('manual_components_text_hidden');
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'manual_components_text';
+            hiddenInput.id = 'manual_components_text_hidden';
+            document.getElementById('equipmentForm').appendChild(hiddenInput);
+        }
+        hiddenInput.value = JSON.stringify(manualComponentsData);
+
+        const displayText = formatManualComponents(manualComponentsData, true);
+        const displayDiv = document.getElementById('manualComponents');
+        displayDiv.innerHTML = `
+            <div class="manual-components-edit-wrapper">
+                <div id="manualComponentsDisplay">${displayText}</div>
+                <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
+            </div>
+        `;
+        
+        closeManualComponentsModal();
+    }
+
+    function formatManualComponents(data, isHtml = false) {
+        let result = '';
+        const order = ["Процессор", "Материнская плата", "Оперативная память", "Хранение данных", "Видеокарта", "Блок питания", "Корпус"];
+
+        order.forEach(comp => {
+            if (data[comp]) {
+                const fieldOrder = {
+                    "Процессор": ["name", "model", "frequency", "cores"],
+                    "Материнская плата": ["name", "model", "socket"],
+                    "Оперативная память": ["name", "model", "capacity", "type"],
+                    "Хранение данных": ["name", "model", "capacity", "type"],
+                    "Видеокарта": ["name", "model", "memory"],
+                    "Блок питания": ["name", "model", "power"],
+                    "Корпус": ["name", "model", "form_factor"]
+                };
+
+                const compData = data[comp];
+                const isStorage = comp === 'Хранение данных';
+                const items = (isStorage && !Array.isArray(compData)) ? [compData] : compData;
+
+                if (comp === 'Хранение данных' && Array.isArray(data[comp])) {
+                    data[comp].forEach(storageItem => {
+                        let line = `<strong>Хранение данных:</strong> `;
+                        const parts = [];
+                        const fields = fieldOrder[comp];
+
+                        fields.forEach(key => {
+                            if (storageItem[key]) {
+                                let value = storageItem[key];
+                                if (key === 'capacity') value += ' ГБ';
+                                parts.push(value);
+                            }
+                        });
+                        line += parts.join(', ');
+                        result += isHtml ? `<div class="selected-component-item">${line}</div>` : line + '\n';
+                    });
+                } else {
+                    const details = data[comp];
+                    let line = `<strong>${fieldLabels[comp] || comp}:</strong> `;
+                    const parts = [];
+                    const fields = fieldOrder[comp] || Object.keys(details);
+
+                    fields.forEach(key => {
+                        if (details[key]) {
+                            let value = details[key];
+                            if (comp === 'Процессор') {
+                                if (key === 'frequency') value += ' ГГц';
+                                if (key === 'cores') value += ' ядра';
+                            } else if (comp === 'Оперативная память' && key === 'capacity') {
+                                value += ' ГБ';
+                            } else if (comp === 'Видеокарта' && key === 'memory') {
+                                value += ' ГБ';
+                            } else if (comp === 'Блок питания' && key === 'power') {
+                                value += ' Вт';
+                            }
+                            parts.push(value);
+                        }
+                    });
+                    line += parts.join(', ');
+                    result += isHtml ? `<div class="selected-component-item">${line}</div>` : line + '\n';
+                }
+            }
+        });
+        return isHtml ? result : result.trim();
+    }
+
+    // Добавляем функцию для открытия модального окна и заполнения полей
+    function openManualComponentsModal() {
+        const modal = document.getElementById('manualComponentsModal');
+        const formBody = document.getElementById('manualComponentsForm');
+        formBody.innerHTML = ''; // Очищаем содержимое
+
+        const components = equipmentFields['Компьютеры'].components;
+        let existingData = {};
+        const hiddenInput = document.getElementById('manual_components_text_hidden');
+        if (hiddenInput && hiddenInput.value) {
+            try {
+                existingData = JSON.parse(hiddenInput.value);
+            } catch (e) {
+                console.error("Ошибка парсинга manual_components_text:", e);
+                existingData = {}; // Используем пустой объект в случае ошибки
+            }
+        }
+
+        components.forEach(componentType => {
+            const fields = equipmentFields[componentType].fields;
+            let groupHtml = `<div class="component-group" id="manual-group-${componentType.replace(/\s+/g, '_')}"><h3>${componentType}</h3>`;
+
+            if (componentType === 'Хранение данных') {
+                const storageData = existingData[componentType] || [{}]; // Массив объектов для дисков
+                storageData.forEach((storageItem, index) => {
+                    groupHtml += `<div class="storage-entry" data-index="${index}">`;
+                    fields.forEach(field => {
+                        const label = fieldLabels[field] || field;
+                        const value = storageItem[field] || '';
+                        groupHtml += `
+                            <div class="form-group-modal">
+                                <label for="manual_${componentType}_${index}_${field}">${label}</label>
+                                <input type="text" id="manual_${componentType}_${index}_${field}" name="manual_${componentType}_${index}_${field}" value="${value}" placeholder="${label}">
+                            </div>
+                        `;
+                    });
+                    groupHtml += '</div>';
+                });
+                groupHtml += `<button type="button" class="btn-add-storage" onclick="addStorageEntry()">+ Добавить хранение данных</button>`;
+            } else {
+                fields.forEach(field => {
+                    const label = fieldLabels[field] || field;
+                    const value = (existingData[componentType] && typeof existingData[componentType] === 'object' && !Array.isArray(existingData[componentType]) && existingData[componentType][field]) ? existingData[componentType][field] : '';
+                    groupHtml += `
+                        <div class="form-group-modal">
+                            <label for="manual_${componentType}_${field}">${label}</label>
+                            <input type="text" id="manual_${componentType}_${field}" name="manual_${componentType}_${field}" value="${value}" placeholder="${label}">
+                        </div>
+                    `;
+                });
+            }
+
+            groupHtml += '</div>';
+            formBody.innerHTML += groupHtml;
+        });
+
+        modal.style.display = 'block';
+    }
+</script>
+{% endblock %}

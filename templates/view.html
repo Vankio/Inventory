@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Просмотр - {{ item.name }}{% endblock %}
+
+{% block content %}
+        <div class="header">
+            <div class="breadcrumb">
+                <a href="{{ url_for('index') }}"><i class="fas fa-home"></i></a>
+                <span>/</span>
+                <a href="{{ url_for('category_view', category=item.type) }}">{{ item.type }}</a>
+                <span>/</span>
+                <span>Просмотр: {{ item.name }}</span>
+            </div>
+        </div>
+        <div class="category-content">
+            <h1><i class="{{ equipment_types[item.type].icon }}"></i> Просмотр: {{ item.name }}</h1>
+            <div class="equipment-form">
+                <div class="form-group">
+                    <label>Инвентарный номер</label>
+                    <p>{{ item.inventory_number or '-' }}</p>
+                </div>
+                <div class="form-group">
+                    <label>Название</label>
+                    <p>{{ item.name or '-' }}</p>
+                </div>
+                <div class="form-group">
+                    <label>Отдел</label>
+                    <p>{{ item.department or '-' }}</p>
+                </div>
+                <div class="form-group">
+                    <label>Статус</label>
+                    <p>{{ item.status or '-' }}</p>
+                </div>
+                 <div class="form-group">
+                    <label>Стоимость</label>
+                    <p>{{ item.price or '-' }}</p>
+                </div>
+                <div class="form-group">
+                    <label>Комментарий</label>
+                    <p>{{ item.comment or '-' }}</p>
+                </div>
+
+                {% if item.type in equipment_fields and equipment_fields[item.type].needs_components %}
+                    <h3>Комплектующие</h3>
+                    {% if item.details_parsed and item.details_parsed.components %}
+                        <div class="components-list">
+                        {% for comp_type, comp_id in item.details_parsed.components.items() %}
+                            <div class="component-item">
+                                <strong class="component-type">{{ comp_type }}:</strong>
+                                <div class="component-details">
+                                    {% set comp_key = item.id|string + '_' + comp_type %}
+                                    {% set comp_info = available_components.get(comp_key) %}
+                                    {% if comp_info %}
+                                        {# Если comp_info это список, итерируемся по нему #}
+                                        {% if comp_info is iterable and comp_info is not string %}
+                                            {% for sub_comp in comp_info %}
+                                                <div class="sub-component">
+                                                    <a href="{{ url_for('view_equipment', id=sub_comp.id) }}">{{ sub_comp.name }}</a>
+                                                    - <span>{{ sub_comp.formatted_details }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        {# Иначе, это один элемент #}
+                                        {% else %}
+                                            <a href="{{ url_for('view_equipment', id=comp_id) }}">{{ comp_info.name }}</a>
+                                            - <span>{{ comp_info.formatted_details }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        ID {{ comp_id }} (информация не найдена)
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if item.details_parsed and item.details_parsed.manual_components %}
+                        <div class="components-list manual-components">
+                        {% for comp_type, comp_details in item.details_parsed.manual_components.items() %}
+                            <div class="component-item">
+                                <strong class="component-type">{{ comp_type }}:</strong>
+                                <div class="component-details">
+                                    <span>{{ format_component_details(comp_type, comp_details) }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if not (item.details_parsed and (item.details_parsed.components or item.details_parsed.manual_components)) %}
+                        <p>-</p>
+                    {% endif %}
+                {% else %}
+                    <h3>Характеристики</h3>
+                    {% if item.details_parsed %}
+                        {% for field in equipment_fields[item.type].fields %}
+                            {% if field != 'name' %}
+                                <div class="form-group">
+                                    <label>{{ field_labels.get(field, field) }}</label>
+                                    <p>{{ item.details_parsed.get(field, '-') }}</p>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                     {% else %}
+                        <p>-</p>
+                    {% endif %}
+                {% endif %}
+
+                <div class="form-actions">
+                    <a href="{{ url_for('edit_equipment', id=item.id) }}" class="btn-primary">Редактировать</a>
+                    <a href="{{ url_for('category_view', category=item.type) }}" class="btn-secondary">Назад к списку</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
