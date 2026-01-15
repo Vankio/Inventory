@@ -146,20 +146,132 @@
         'power': 'Мощность (Вт)'
     };
     
+    // Делегирование событий для кнопок (работает даже если кнопки созданы динамически)
+    document.addEventListener('click', function(e) {
+        // Получаем элемент, на который кликнули (может быть текстовый узел или дочерний элемент)
+        let target = e.target;
+        
+        // Если клик на текстовом узле, получаем родительский элемент
+        if (target.nodeType === 3) {
+            target = target.parentElement;
+        }
+        
+        // Проверяем все возможные варианты
+        const btnSelect = target.closest ? target.closest('.btn-select-components-modal') : null;
+        const btnManual = target.closest ? target.closest('.btn-manual-components-modal') : null;
+        const btnEdit = target.closest ? target.closest('.edit-manual-components-btn') : null;
+        
+        // Проверяем классы напрямую
+        const hasSelectClass = target.classList && target.classList.contains('btn-select-components-modal');
+        const hasManualClass = target.classList && target.classList.contains('btn-manual-components-modal');
+        const hasEditClass = target.classList && target.classList.contains('edit-manual-components-btn');
+        
+        // Обработка кнопки "Выбрать комплектующие"
+        if (btnSelect || hasSelectClass) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof openComponentsModal === 'function') {
+                openComponentsModal();
+            }
+            return false;
+        }
+        
+        // Обработка кнопки "Вписать комплектующие"
+        if (btnManual || hasManualClass) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof openManualComponentsModal === 'function') {
+                openManualComponentsModal();
+            }
+            return false;
+        }
+        
+        // Обработка кнопки редактирования ручных комплектующих
+        if (btnEdit || hasEditClass) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof openManualComponentsModal === 'function') {
+                openManualComponentsModal();
+            }
+            return false;
+        }
+    }, true); // Используем capture phase для более раннего перехвата
+    
+    // Убеждаемся, что details_parsed всегда является объектом
+    if (isEdit && editItem) {
+        if (!editItem.details_parsed) {
+            editItem.details_parsed = {};
+        }
+    }
+    
+    // Функция для гарантированной инициализации кнопок
+    function ensureButtonsInitialized() {
+        const selectBtn = document.querySelector('.btn-select-components-modal');
+        const manualBtn = document.querySelector('.btn-manual-components-modal');
+        const editBtn = document.querySelector('.edit-manual-components-btn');
+        
+        if (selectBtn && !selectBtn.hasAttribute('data-listener-added')) {
+            selectBtn.setAttribute('data-listener-added', 'true');
+            selectBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof openComponentsModal === 'function') {
+                    openComponentsModal();
+                }
+            });
+        }
+        
+        if (manualBtn && !manualBtn.hasAttribute('data-listener-added')) {
+            manualBtn.setAttribute('data-listener-added', 'true');
+            manualBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof openManualComponentsModal === 'function') {
+                    openManualComponentsModal();
+                }
+            });
+        }
+        
+        if (editBtn && !editBtn.hasAttribute('data-listener-added')) {
+            editBtn.setAttribute('data-listener-added', 'true');
+            editBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof openManualComponentsModal === 'function') {
+                    openManualComponentsModal();
+                }
+            });
+        }
+    }
+    
     // Инициализация при загрузке
     document.addEventListener('DOMContentLoaded', function() {
-        // Сначала вызываем updateFormFields, чтобы создать все нужные поля
-        if (isEdit && editItem) {
-            document.getElementById('redirectCategory').value = editItem.type;
-            updateFormFields(); // Эта функция создаст контейнеры #selectedComponents и #manualComponents
-
-            // Теперь, когда все элементы созданы, вызываем функции для их заполнения
-            displayExistingComponents(); // Для компонентов из БД
-            displayExistingManualComponents(); // Для компонентов, введенных вручную
-
-        } else if (preSelectedType) {
-            document.getElementById('redirectCategory').value = preSelectedType;
+        if (preSelectedType || (isEdit && editItem)) {
+            const type = isEdit && editItem ? editItem.type : preSelectedType;
+            const redirectCategoryEl = document.getElementById('redirectCategory');
+            if (redirectCategoryEl) {
+                redirectCategoryEl.value = type;
+            }
             updateFormFields();
+
+            if (isEdit && editItem) {
+                // Используем задержку для обеспечения полной инициализации DOM
+                setTimeout(function() {
+                    displayExistingComponents();
+                    displayExistingManualComponents();
+                    ensureButtonsInitialized();
+                    
+                    // Дополнительная проверка через 500ms
+                    setTimeout(function() {
+                        ensureButtonsInitialized();
+                    }, 500);
+                }, 100);
+            } else {
+                // Для новых записей тоже проверяем кнопки
+                setTimeout(function() {
+                    ensureButtonsInitialized();
+                }, 100);
+            }
         }
     });
     
@@ -211,10 +323,9 @@
            formGroup.className = 'form-group';
            
            const label = fieldLabels[field] || field;
-           // Заполняем значение только если мы не меняем тип в режиме редактирования
            const value = (isEdit && editItem && editItem.type === selectedType)
                ? (field === 'name' ? editItem.name : (editItem.details_parsed ? editItem.details_parsed[field] : ''))
-               : (field === 'name' && isEdit && editItem ? editItem.name : ''); // Сохраняем имя при смене типа
+               : (field === 'name' && isEdit && editItem ? editItem.name : '');
            const inputName = field === 'type' ? 'component_type' : field;
 
            let inputHtml = `<label for="${field}">${label}:</label>
@@ -231,7 +342,6 @@
            formGroup.innerHTML = inputHtml;
            dynamicFields.appendChild(formGroup);
            
-           // Заполняем datalist
            fetch(`/api/field_values/${field}`)
                .then(response => response.json())
                .then(data => {
@@ -252,28 +362,53 @@
             formGroup.innerHTML = `
                 <label>Комплектующие:</label>
                 <div class="button-group">
-                    <button type="button" class="btn-select-components" onclick="openComponentsModal()">
+                    <button type="button" class="btn-select-components btn-select-components-modal" data-action="select">
                         Выбрать комплектующие
                     </button>
-                    <button type="button" class="btn-select-components" onclick="openManualComponentsModal()">
+                    <button type="button" class="btn-select-components btn-manual-components-modal" data-action="manual">
                         Вписать комплектующие
                     </button>
                 </div>
                 <div id="selectedComponents" class="selected-components"></div>
-                <div id="manualComponents" class="manual-components-display">
-                    {% if editItem and editItem.details_parsed and editItem.details_parsed.manual_components %}
-                        <div class="manual-components-edit-wrapper">
-                            <div id="manualComponentsDisplay">{{ formatManualComponents(editItem.details_parsed.manual_components, true) | safe }}</div>
-                            <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
-                        </div>
-                    {% endif %}
-                </div>
+                <div id="manualComponents" class="manual-components-display"></div>
             `;
             dynamicFields.appendChild(formGroup);
             
-            if (isEdit && editItem && editItem.details_parsed && editItem.details_parsed.components) {
-                // Немедленно вызываем функцию для отображения и создания скрытых полей
-                displayExistingComponents();
+            // Добавляем обработчики событий для кнопок
+            const selectBtn = formGroup.querySelector('.btn-select-components-modal');
+            const manualBtn = formGroup.querySelector('.btn-manual-components-modal');
+            
+            if (selectBtn && !selectBtn.hasAttribute('data-listener-added')) {
+                selectBtn.setAttribute('data-listener-added', 'true');
+                selectBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof openComponentsModal === 'function') {
+                        openComponentsModal();
+                    }
+                });
+            }
+            if (manualBtn && !manualBtn.hasAttribute('data-listener-added')) {
+                manualBtn.setAttribute('data-listener-added', 'true');
+                manualBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof openManualComponentsModal === 'function') {
+                        openManualComponentsModal();
+                    }
+                });
+            }
+            
+            // Немедленно проверяем инициализацию
+            ensureButtonsInitialized();
+            
+            if (isEdit && editItem) {
+                // Используем setTimeout для обеспечения того, что DOM полностью обновлен
+                setTimeout(function() {
+                    displayExistingComponents();
+                    displayExistingManualComponents();
+                    ensureButtonsInitialized();
+                }, 100);
             }
         }
     }
@@ -302,7 +437,6 @@
         modalBody.innerHTML = html;
         
         components.forEach(componentType => {
-            // Собираем уже выбранные ID из скрытых инпутов
             const selectedIds = [];
             document.querySelectorAll(`input[name="component_${componentType}"]`).forEach(input => {
                 selectedIds.push(input.value);
@@ -327,7 +461,7 @@
                 const isMultiple = (equipmentFields['Компьютеры'].multiple_components || []).includes(componentType);
                 const currentSelectedIds = new Set(selectedIds.map(String));
 
-                container.innerHTML = ''; // Очищаем контейнер
+                container.innerHTML = '';
 
                 if (isMultiple) {
                     data.forEach(comp => {
@@ -409,7 +543,6 @@
         const manualComponentsDiv = document.getElementById('manualComponents');
         if (!manualComponentsDiv) return;
 
-        // 1. Создаем скрытое поле
         let hiddenInput = document.getElementById('manual_components_text_hidden');
         if (!hiddenInput) {
             hiddenInput = document.createElement('input');
@@ -420,14 +553,23 @@
         }
         hiddenInput.value = JSON.stringify(manualComponentsData);
 
-        // 2. Создаем отображение
         const displayText = formatManualComponents(manualComponentsData, true);
         manualComponentsDiv.innerHTML = `
             <div class="manual-components-edit-wrapper">
                 <div id="manualComponentsDisplay">${displayText}</div>
-                <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
+                <button type="button" class="edit-manual-components-btn">&#9998;</button>
             </div>
         `;
+        
+        // Добавляем обработчик события для кнопки редактирования
+        const editBtn = manualComponentsDiv.querySelector('.edit-manual-components-btn');
+        if (editBtn) {
+            editBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openManualComponentsModal();
+            });
+        }
     }
     
     function saveComponents() {
@@ -435,7 +577,6 @@
         const multipleComponents = equipmentFields['Компьютеры'].multiple_components || [];
         const selectedComponentsDiv = document.getElementById('selectedComponents');
 
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем и отображение, и старые инпуты перед добавлением новых.
         selectedComponentsDiv.innerHTML = '';
         document.querySelectorAll('input[name^="component_"]').forEach(input => input.remove());
 
@@ -460,7 +601,6 @@
     }
 
     function createHiddenComponentInput(componentType, id, text, details, container, createInput = false) {
-        // Создаем скрытое поле, только если это указано (например, при выборе из модального окна)
         if (createInput) {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
@@ -469,12 +609,9 @@
             document.getElementById('equipmentForm').appendChild(hiddenInput);
         }
 
-        // Создаем элемент для отображения
         const componentDiv = document.createElement('div');
         componentDiv.className = 'selected-component-item';
-        // Убираем статус "(Установленно)" из отображаемого текста
         const cleanText = text.replace(/\s\(Установленно\)$/, '');
-        // Теперь `text` уже содержит все детали, так что `detailsText` не нужен.
         componentDiv.innerHTML = `<span>${componentType}: ${cleanText}</span>`;
         container.appendChild(componentDiv);
     }
@@ -493,18 +630,50 @@
     function openManualComponentsModal() {
         const modal = document.getElementById('manualComponentsModal');
         const formBody = document.getElementById('manualComponentsForm');
-        formBody.innerHTML = ''; // Очищаем содержимое
+        formBody.innerHTML = '';
 
         const components = equipmentFields['Компьютеры'].components;
-        const existingData = (isEdit && editItem && editItem.details_parsed && editItem.details_parsed.manual_components) ? editItem.details_parsed.manual_components : {};
+        let existingData = {};
+        const hiddenInput = document.getElementById('manual_components_text_hidden');
+        if (hiddenInput && hiddenInput.value) {
+            try {
+                existingData = JSON.parse(hiddenInput.value);
+            } catch (e) {
+                console.error("Ошибка парсинга manual_components_text:", e);
+                existingData = {};
+            }
+        }
 
         components.forEach(componentType => {
             const fields = equipmentFields[componentType].fields;
             let groupHtml = `<div class="component-group" id="manual-group-${componentType.replace(/\s+/g, '_')}"><h3>${componentType}</h3>`;
 
             if (componentType === 'Хранение данных') {
-                // existingData['Хранение данных'] должен быть массивом
-                const storageData = (existingData[componentType] && Array.isArray(existingData[componentType])) ? existingData[componentType] : [{}];
+                let storageData = existingData[componentType];
+                
+                // Убеждаемся, что storageData является массивом
+                if (!storageData) {
+                    // Если данных нет, создаем массив с одним пустым элементом
+                    storageData = [{}];
+                } else if (!Array.isArray(storageData)) {
+                    // Если это объект, преобразуем в массив с одним элементом
+                    if (typeof storageData === 'object' && storageData !== null) {
+                        storageData = [storageData];
+                    } else {
+                        // Если это что-то другое (строка, число и т.д.), создаем пустой массив
+                        storageData = [{}];
+                    }
+                }
+                // Если массив пустой, создаем один пустой элемент
+                if (storageData.length === 0) {
+                    storageData = [{}];
+                }
+                
+                // Дополнительная проверка перед forEach
+                if (!Array.isArray(storageData)) {
+                    storageData = [{}];
+                }
+                
                 storageData.forEach((storageItem, index) => {
                     groupHtml += `<div class="storage-entry" data-index="${index}">`;
                     fields.forEach(field => {
@@ -521,12 +690,9 @@
                 });
                 groupHtml += `<button type="button" class="btn-add-storage" onclick="addStorageEntry()">+ Добавить хранение данных</button>`;
             } else {
-                 fields.forEach(field => {
+                fields.forEach(field => {
                     const label = fieldLabels[field] || field;
-                    // Для остальных компонентов, которые являются объектами
-                    const value = (existingData[componentType] && typeof existingData[componentType] === 'object' && !Array.isArray(existingData[componentType]) && existingData[componentType][field])
-                                  ? existingData[componentType][field]
-                                  : '';
+                    const value = (existingData[componentType] && typeof existingData[componentType] === 'object' && !Array.isArray(existingData[componentType]) && existingData[componentType][field]) ? existingData[componentType][field] : '';
                     groupHtml += `
                         <div class="form-group-modal">
                             <label for="manual_${componentType}_${field}">${label}</label>
@@ -567,7 +733,6 @@
         });
         newEntryHtml += '</div>';
 
-        // Вставляем новый блок перед кнопкой "Добавить"
         addButton.insertAdjacentHTML('beforebegin', newEntryHtml);
     }
 
@@ -631,12 +796,24 @@
 
         const displayText = formatManualComponents(manualComponentsData, true);
         const displayDiv = document.getElementById('manualComponents');
-        displayDiv.innerHTML = `
-            <div class="manual-components-edit-wrapper">
-                <div id="manualComponentsDisplay">${displayText}</div>
-                <button type="button" class="edit-manual-components-btn" onclick="openManualComponentsModal()">&#9998;</button>
-            </div>
-        `;
+        if (displayDiv) {
+            displayDiv.innerHTML = `
+                <div class="manual-components-edit-wrapper">
+                    <div id="manualComponentsDisplay">${displayText}</div>
+                    <button type="button" class="edit-manual-components-btn">&#9998;</button>
+                </div>
+            `;
+            
+            // Добавляем обработчик события для кнопки редактирования
+            const editBtn = displayDiv.querySelector('.edit-manual-components-btn');
+            if (editBtn) {
+                editBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openManualComponentsModal();
+                });
+            }
+        }
         
         closeManualComponentsModal();
     }
@@ -658,11 +835,15 @@
                 };
 
                 const compData = data[comp];
-                const isStorage = comp === 'Хранение данных';
-                const items = (isStorage && !Array.isArray(compData)) ? [compData] : compData;
-
-                if (comp === 'Хранение данных' && Array.isArray(data[comp])) {
-                    data[comp].forEach(storageItem => {
+                
+                if (comp === 'Хранение данных') {
+                    // Убеждаемся, что compData является массивом
+                    let storageArray = compData;
+                    if (!Array.isArray(storageArray)) {
+                        // Если это объект, преобразуем в массив с одним элементом
+                        storageArray = [storageArray];
+                    }
+                    storageArray.forEach(storageItem => {
                         let line = `<strong>Хранение данных:</strong> `;
                         const parts = [];
                         const fields = fieldOrder[comp];
@@ -677,9 +858,9 @@
                         line += parts.join(', ');
                         result += isHtml ? `<div class="selected-component-item">${line}</div>` : line + '\n';
                     });
-                } else {
-                    const details = data[comp];
-                    let line = `<strong>${fieldLabels[comp] || comp}:</strong> `;
+                } else if (typeof compData === 'object' && !Array.isArray(compData)) {
+                    const details = compData;
+                    let line = `<strong>${comp}:</strong> `;
                     const parts = [];
                     const fields = fieldOrder[comp] || Object.keys(details);
 
@@ -705,65 +886,6 @@
             }
         });
         return isHtml ? result : result.trim();
-    }
-
-    // Добавляем функцию для открытия модального окна и заполнения полей
-    function openManualComponentsModal() {
-        const modal = document.getElementById('manualComponentsModal');
-        const formBody = document.getElementById('manualComponentsForm');
-        formBody.innerHTML = ''; // Очищаем содержимое
-
-        const components = equipmentFields['Компьютеры'].components;
-        let existingData = {};
-        const hiddenInput = document.getElementById('manual_components_text_hidden');
-        if (hiddenInput && hiddenInput.value) {
-            try {
-                existingData = JSON.parse(hiddenInput.value);
-            } catch (e) {
-                console.error("Ошибка парсинга manual_components_text:", e);
-                existingData = {}; // Используем пустой объект в случае ошибки
-            }
-        }
-
-        components.forEach(componentType => {
-            const fields = equipmentFields[componentType].fields;
-            let groupHtml = `<div class="component-group" id="manual-group-${componentType.replace(/\s+/g, '_')}"><h3>${componentType}</h3>`;
-
-            if (componentType === 'Хранение данных') {
-                const storageData = existingData[componentType] || [{}]; // Массив объектов для дисков
-                storageData.forEach((storageItem, index) => {
-                    groupHtml += `<div class="storage-entry" data-index="${index}">`;
-                    fields.forEach(field => {
-                        const label = fieldLabels[field] || field;
-                        const value = storageItem[field] || '';
-                        groupHtml += `
-                            <div class="form-group-modal">
-                                <label for="manual_${componentType}_${index}_${field}">${label}</label>
-                                <input type="text" id="manual_${componentType}_${index}_${field}" name="manual_${componentType}_${index}_${field}" value="${value}" placeholder="${label}">
-                            </div>
-                        `;
-                    });
-                    groupHtml += '</div>';
-                });
-                groupHtml += `<button type="button" class="btn-add-storage" onclick="addStorageEntry()">+ Добавить хранение данных</button>`;
-            } else {
-                fields.forEach(field => {
-                    const label = fieldLabels[field] || field;
-                    const value = (existingData[componentType] && typeof existingData[componentType] === 'object' && !Array.isArray(existingData[componentType]) && existingData[componentType][field]) ? existingData[componentType][field] : '';
-                    groupHtml += `
-                        <div class="form-group-modal">
-                            <label for="manual_${componentType}_${field}">${label}</label>
-                            <input type="text" id="manual_${componentType}_${field}" name="manual_${componentType}_${field}" value="${value}" placeholder="${label}">
-                        </div>
-                    `;
-                });
-            }
-
-            groupHtml += '</div>';
-            formBody.innerHTML += groupHtml;
-        });
-
-        modal.style.display = 'block';
     }
 </script>
 {% endblock %}

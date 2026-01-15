@@ -268,10 +268,12 @@
 {% block scripts %}
 <script>
     function updateStatus(id, status) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         fetch(`/update_status/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ status: status })
         })

@@ -844,6 +844,9 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
 }
 
 .btn-select-components:hover {
@@ -930,6 +933,8 @@ body {
     display: flex;
     gap: 10px;
     align-items: center; /* Выравнивание элементов по центру */
+    position: relative;
+    z-index: 10;
 }
 
 .edit-manual-components-btn {
@@ -940,6 +945,9 @@ body {
     color: #00529B; /* Pencil color */
     margin-left: 10px; /* Отступ от текста */
     transition: color 0.2s;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
 }
 
 .edit-manual-components-btn:hover {
@@ -954,6 +962,8 @@ body {
     background-color: #f5f5f5;
     border-radius: 6px;
     margin-top: 10px;
+    position: relative;
+    z-index: 10;
 }
 
 .form-group-modal {

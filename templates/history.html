@@ -40,19 +40,19 @@
                         {% for record in history %}
                         <tr data-history-id="{{ record.id }}">
                             <td>{{ record.change_date | format_datetime }}</td>
-                            <td>{{ record.field_name }}</td>
+                            <td>{{ field_labels.get(record.field_name, record.field_name) }}</td>
                             <td>
-                                {% if record.field_name == 'Детали' %}
-                                    <pre>{{ record.old_value | format_details }}</pre>
+                                {% if record.field_name == 'details' %}
+                                    <pre>{{ record.old_value | safe }}</pre>
                                 {% else %}
-                                    {{ record.old_value if record.old_value else '-' }}
+                                    {{ record.old_value if record.old_value and record.old_value != 'None' else '-' }}
                                 {% endif %}
                             </td>
                             <td>
-                                {% if record.field_name == 'Детали' %}
-                                    <pre>{{ record.new_value | format_details }}</pre>
+                                {% if record.field_name == 'details' %}
+                                    <pre>{{ record.new_value | safe }}</pre>
                                 {% else %}
-                                    {{ record.new_value if record.new_value else '-' }}
+                                    {{ record.new_value if record.new_value and record.new_value != 'None' else '-' }}
                                 {% endif %}
                             </td>
                             <td class="comment-cell">
@@ -95,10 +95,12 @@
             saveButton.addEventListener('click', () => {
                 const newComment = commentInput.value;
                 
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                 fetch(`/update_history_comment/${historyId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({ comment: newComment })
                 })

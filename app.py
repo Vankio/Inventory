@@ -71,11 +71,11 @@ def format_component_details(component_type, details):
                 parts.append(str(value))
         return " ".join(parts) if component_type == 'Процессор' else ", ".join(parts)
 
-    if component_type == 'Хранение данных' and isinstance(details, list):
-        return ' | '.join(format_single_item(item) for item in details)
-    elif isinstance(details, dict):
-        return format_single_item(details)
-    return ""
+    # Преобразуем в список, если это не список, для единообразной обработки
+    if not isinstance(details, list):
+        details = [details]
+
+    return ' | '.join(format_single_item(item) for item in details)
 
 def format_details_filter(value):
     """Форматирует JSON-строку в читаемый вид."""
@@ -324,14 +324,30 @@ def log_change(equipment_id, field_name, old_value, new_value, comment=None):
     cursor = db.cursor()
     change_date = get_utc_plus6()
 
-    # Гарантируем, что значения не NULL
-    old_value = old_value if old_value is not None else ''
-    new_value = new_value if new_value is not None else ''
+    # Приводим None к пустой строке для корректного сравнения
+    old_value_str = str(old_value) if old_value is not None else ''
+    new_value_str = str(new_value) if new_value is not None else ''
+
+    # Если значения идентичны после приведения, не логируем
+    if old_value_str == new_value_str:
+        return
+
+    # Если поле - 'details', сравниваем JSON-объекты, а не строки
+    if field_name == 'details':
+        try:
+            old_json = json.loads(old_value) if old_value else {}
+            new_json = json.loads(new_value) if new_value else {}
+            if old_json == new_json:
+                return # Не логируем, если объекты идентичны
+        except (json.JSONDecodeError, TypeError):
+            # Если парсинг не удался, сравниваем как строки
+            if old_value_str == new_value_str:
+                return
     
     cursor.execute("""
         INSERT INTO history (equipment_id, field_name, old_value, new_value, change_date, comment)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (equipment_id, field_name, str(old_value), str(new_value), change_date, comment))
+    """, (equipment_id, field_name, old_value_str, new_value_str, change_date, comment))
     db.commit()
  
 
@@ -543,7 +559,7 @@ def login():
             return redirect(next_url or url_for('index'))
         else:
             flash('Неверный логин или пароль.', 'danger')
-    return render_template('login.html')
+    return render_template('login.html', equipment_types=EQUIPMENT_TYPES, equipment_fields=EQUIPMENT_FIELDS, is_component_category=False)
 
 @app.route('/logout')
 def logout():
@@ -946,14 +962,19 @@ def edit_equipment(id):
         if manual_components_text:
             try:
                 manual_data = json.loads(manual_components_text)
-                # Убедимся, что 'Хранение данных' всегда является списком
-                if 'Хранение данных' in manual_data:
-                    storage = manual_data['Хранение данных']
-                    if not isinstance(storage, list):
-                        manual_data['Хранение данных'] = [storage]
-                    # Удаляем пустые записи, которые могут появиться
+                # Убедимся, что 'Хранение данных' является списком, только если оно существует
+                if 'Хранение данных' in manual_data and not isinstance(manual_data['Хранение данных'], list):
+                    manual_data['Хранение данных'] = [manual_data['Хранение данных']]
+                
+                # Удаляем пустые записи из списка, если он есть
+                if 'Хранение данных' in manual_data and isinstance(manual_data['Хранение данных'], list):
                     manual_data['Хранение данных'] = [s for s in manual_data['Хранение данных'] if s]
-                details_dict['manual_components'] = manual_data
+                
+                if manual_data:
+                    details_dict['manual_components'] = manual_data
+                elif 'manual_components' in details_dict:
+                    del details_dict['manual_components']
+
             except json.JSONDecodeError:
                 pass  # Оставляем старые данные, если новый JSON невалиден
         elif 'manual_components' in details_dict:
@@ -1045,49 +1066,53 @@ def edit_equipment(id):
             log_change(id, 'pdf_path', old_pdf_path, pdf_path, f'Изменен путь к PDF с {old_pdf_path} на {pdf_path}')
         if old_department != department:
             log_change(id, 'department', old_department, department, f'Изменен отдел с {old_department} на {department}')
+        # Улучшенное логирование для цены и комментария
         if old_price != price:
-            log_change(id, 'price', old_price, price, f'Изменена цена с {old_price} на {price}')
+            old_p = old_price or 'None'
+            new_p = price or 'None'
+            log_change(id, 'price', old_price, price, f'Изменена цена с {old_p} на {new_p}')
+        
         if old_comment != comment:
-            log_change(id, 'comment', old_comment, comment, f'Изменен комментарий с "{old_comment}" на "{comment}"')
+            old_c = f'"{old_comment}"' if old_comment else 'None'
+            new_c = f'"{comment}"' if comment else 'None'
+            log_change(id, 'comment', old_comment, comment, f'Изменен комментарий с {old_c} на {new_c}')
         # Сравниваем old_details и new_details более гранулярно
         try:
             old_details_dict = json.loads(old_details) if old_details else {}
             new_details_dict = json.loads(details) if details else {}
 
-            # 1. Сравнение 'manual_components'
-            old_manual = old_details_dict.pop('manual_components', {})
-            new_manual = new_details_dict.pop('manual_components', {})
+            # Нормализация 'Хранение данных' в 'manual_components'
+            if 'manual_components' in old_details_dict and 'Хранение данных' in old_details_dict['manual_components']:
+                if not isinstance(old_details_dict['manual_components']['Хранение данных'], list):
+                    old_details_dict['manual_components']['Хранение данных'] = [old_details_dict['manual_components']['Хранение данных']]
+            if 'manual_components' in new_details_dict and 'Хранение данных' in new_details_dict['manual_components']:
+                if not isinstance(new_details_dict['manual_components']['Хранение данных'], list):
+                    new_details_dict['manual_components']['Хранение данных'] = [new_details_dict['manual_components']['Хранение данных']]
 
-            if old_manual != new_manual:
-                # Специальная обработка для 'Хранение данных'
-                old_storage = old_manual.get('Хранение данных', [])
-                new_storage = new_manual.get('Хранение данных', [])
-                if old_storage != new_storage:
-                    log_change(id, 'details',
-                               json.dumps({'Хранение данных': old_storage}, ensure_ascii=False),
-                               json.dumps({'Хранение данных': new_storage}, ensure_ascii=False),
-                               'Изменено хранение данных (вручную)')
+            # Сравниваем нормализованные словари
+            if old_details_dict != new_details_dict:
+                # Разделяем на 'manual_components' и 'other_details' для более чистого лога
+                old_manual = old_details_dict.pop('manual_components', {})
+                new_manual = new_details_dict.pop('manual_components', {})
+                old_components_from_db = old_details_dict.pop('components', {})
+                new_components_from_db = new_details_dict.pop('components', {})
 
-                # Обработка остальных компонентов
-                other_old_manual = {k: v for k, v in old_manual.items() if k != 'Хранение данных'}
-                other_new_manual = {k: v for k, v in new_manual.items() if k != 'Хранение данных'}
-                if other_old_manual != other_new_manual:
+                # Логируем изменения в 'manual_components'
+                if old_manual != new_manual:
                     log_change(id, 'details',
-                               json.dumps({'manual_components': other_old_manual}, ensure_ascii=False),
-                               json.dumps({'manual_components': other_new_manual}, ensure_ascii=False),
+                               json.dumps({'manual_components': old_manual}, ensure_ascii=False) if old_manual else '',
+                               json.dumps({'manual_components': new_manual}, ensure_ascii=False) if new_manual else '',
                                'Изменены компоненты (вручную)')
 
-            # 2. Сравнение остальных деталей (кроме 'components', которые логируются отдельно)
-            old_details_dict.pop('components', None)
-            new_details_dict.pop('components', None)
-            if old_details_dict != new_details_dict:
-                 log_change(id, 'details',
-                           json.dumps(old_details_dict, ensure_ascii=False) if old_details_dict else '',
-                           json.dumps(new_details_dict, ensure_ascii=False) if new_details_dict else '',
-                           'Изменены прочие детали')
+                # Логируем изменения в остальных деталях
+                if old_details_dict != new_details_dict:
+                    log_change(id, 'details',
+                               json.dumps(old_details_dict, ensure_ascii=False) if old_details_dict else '',
+                               json.dumps(new_details_dict, ensure_ascii=False) if new_details_dict else '',
+                               'Изменены прочие детали')
 
         except (json.JSONDecodeError, TypeError):
-             # Если детали не в формате JSON, сравниваем как строки (старое поведение)
+            # Если детали не в формате JSON, сравниваем как строки
             if old_details != details:
                 log_change(id, 'details', old_details, details, 'Изменены детали оборудования')
 
@@ -1154,7 +1179,8 @@ def edit_equipment(id):
                     })
 
             item_dict['details_parsed']['formatted_components'] = formatted_components
-    except:
+    except (json.JSONDecodeError, TypeError) as e:
+        # Убеждаемся, что details_parsed всегда является объектом, даже при ошибке парсинга
         item_dict['details_parsed'] = {}
     
     return render_template("add_edit.html", equipment_types=EQUIPMENT_TYPES,
@@ -1758,7 +1784,7 @@ def history_view(equipment_id):
 
         history_list.append({
             'id': record_id,
-            'field_name': FIELD_LABELS.get(field_name, field_name),
+            'field_name': field_name, # Передаем оригинальное имя поля
             'old_value': old_value_formatted,
             'new_value': new_value_formatted,
             'change_date': change_date,
@@ -1773,7 +1799,8 @@ def history_view(equipment_id):
                            history=history_list,
                            equipment_types=EQUIPMENT_TYPES,
                            equipment_fields=EQUIPMENT_FIELDS,
-                           field_labels=FIELD_LABELS)
+                           field_labels=FIELD_LABELS
+                          )
 
 
 @app.route('/update_history_comment/<int:history_id>', methods=['POST'])
@@ -1791,6 +1818,57 @@ def update_history_comment(history_id):
         db.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/cleanup_history')
+@login_required
+@role_required(['Администратор'])
+def cleanup_history():
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("SELECT id, field_name, old_value, new_value FROM history")
+    records = cursor.fetchall()
+    
+    ids_to_delete = []
+    for record in records:
+        field_name = record['field_name']
+        old_val_str = record['old_value'] if record['old_value'] is not None and record['old_value'] != 'None' else ''
+        new_val_str = record['new_value'] if record['new_value'] is not None and record['new_value'] != 'None' else ''
+
+        if field_name == 'details':
+            try:
+                old_json = json.loads(old_val_str) if old_val_str else {}
+                new_json = json.loads(new_val_str) if new_val_str else {}
+                
+                # Нормализация
+                for data in [old_json, new_json]:
+                    if 'manual_components' in data and 'Хранение данных' in data['manual_components']:
+                        storage = data['manual_components']['Хранение данных']
+                        if not isinstance(storage, list):
+                            data['manual_components']['Хранение данных'] = [storage]
+
+                if old_json == new_json:
+                    ids_to_delete.append(record['id'])
+            except (json.JSONDecodeError, TypeError):
+                if old_val_str == new_val_str:
+                    ids_to_delete.append(record['id'])
+        else:
+            if old_val_str == new_val_str:
+                ids_to_delete.append(record['id'])
+
+    if ids_to_delete:
+        cursor.execute(f"DELETE FROM history WHERE id IN ({','.join('?' for _ in ids_to_delete)})", ids_to_delete)
+        flash(f'Удалено {len(ids_to_delete)} некорректных записей из истории.', 'success')
+
+    # Обновляем комментарии
+    cursor.execute("UPDATE history SET comment = REPLACE(comment, 'с None на', 'на') WHERE field_name = 'price' AND comment LIKE '%с None на%'")
+    cursor.execute("UPDATE history SET comment = REPLACE(comment, 'с \"\" на', 'на') WHERE field_name = 'comment' AND comment LIKE '%с \"\" на%'")
+    cursor.execute("UPDATE history SET comment = REPLACE(comment, 'с None на', 'на') WHERE field_name = 'comment' AND comment LIKE '%с None на%'")
+    
+    db.commit()
+    
+    flash('Очистка истории завершена.', 'info')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0')
