@@ -1,10 +1,7 @@
 from werkzeug.security import generate_password_hash
 
 passwords = {
-    "admin": "724Tis204",
-    "buh": "buh724",
-    "prakt": "prakt724",
-    "ADS": "ADS123"
+    "admin": "724Tis204"
 }
 
 for user, password in passwords.items():
