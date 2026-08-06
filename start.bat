@@ -1,12 +1,9 @@
 @echo off
 echo Activating virtual environment...
 
-:: Проверка наличия окружения
+:: ГЏГ°Г®ГўГҐГ°ГЄГ  Г­Г Г«ГЁГ·ГЁГї Г®ГЄГ°ГіГ¦ГҐГ­ГЁГї
 if not exist ".venv\Scripts\activate.bat" (
-    echo ERROR: Virtual environment '.venv' not found!
-    echo Please run this command first: python -m venv .venv
-    pause
-    exit /b
+    py -m venv .venv
 )
 
 call .venv\Scripts\activate.bat
@@ -21,5 +18,5 @@ start "Backup" python backup.py
 echo Starting Flask server...
 py app.py
 
-:: Окно не закроется, если сервер упадет с ошибкой
+:: ГЋГЄГ­Г® Г­ГҐ Г§Г ГЄГ°Г®ГҐГІГ±Гї, ГҐГ±Г«ГЁ Г±ГҐГ°ГўГҐГ° ГіГЇГ Г¤ГҐГІ Г± Г®ГёГЁГЎГЄГ®Г©
 pause
