@@ -4,9 +4,9 @@ import requests
 import schedule
 import time
 from datetime import datetime
+from config import YANDEX_DISK_TOKEN
 
 # --- Настройки ---
-YANDEX_DISK_TOKEN = "y0__xC5nvajqveAAhjS0jcg57KDixNDzwiyBStmdoTyKufu3LHmy8W19w"  # Вставьте сюда ваш OAuth-токен
 DB_FILE = "equipment.db"
 BACKUP_DIR = "backups"
 YANDEX_DISK_DIR = "app_backups"  # Папка на Яндекс.Диске для хранения бэкапов
@@ -19,7 +19,7 @@ def job():
         upload_to_yandex_disk(local_backup_path)
 
 def create_backup():
-    """Создает локальную копию базы данных."""
+    """Создает локальную копию базы данных с временной меткой и в папке backups."""
     if not os.path.exists(DB_FILE):
         print(f"Ошибка: Файл базы данных {DB_FILE} не найден.")
         return None
@@ -27,12 +27,19 @@ def create_backup():
     if not os.path.exists(BACKUP_DIR):
         os.makedirs(BACKUP_DIR)
     
-    backup_filename = f"backup.db"
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_filename = f"backup_{timestamp}.db"
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
     
     try:
+        # Создаем временную копию в папке backups
         shutil.copy2(DB_FILE, backup_path)
         print(f"Резервная копия создана: {backup_path}")
+        
+        # Создаем копию в папке backups
+        shutil.copy2(DB_FILE, os.path.join(BACKUP_DIR, "backup.db"))
+        print(f"Резервная копия создана в папке backups: backup.db")
+        
         return backup_path
     except Exception as e:
         print(f"Ошибка при создании локальной резервной копии: {e}")
@@ -40,8 +47,8 @@ def create_backup():
 
 def upload_to_yandex_disk(file_path):
     """Загружает файл на Яндекс.Диск."""
-    if YANDEX_DISK_TOKEN == "ВАШ_ТОКЕН_СЮДА":
-        print("Ошибка: Введите ваш OAuth-токен в переменную YANDEX_DISK_TOKEN.")
+    if YANDEX_DISK_TOKEN == "ВАШ_ТОКЕН_СЮДА" or not YANDEX_DISK_TOKEN:
+        print("Ошибка: Введите ваш OAuth-токен в файл config.py.")
         return
 
     headers = {
@@ -62,7 +69,7 @@ def upload_to_yandex_disk(file_path):
     file_name = os.path.basename(file_path)
     try:
         upload_url_response = requests.get(
-            f"https://cloud-api.yandex.net/v1/disk/resources/upload?path={YANDEX_DISK_DIR}/{file_name}&overwrite=true",
+            f"https://cloud-api.yandex.net/v1/disk/resources/upload?path={YANDEX_DISK_DIR}/{file_name}&overwrite=false",
             headers=headers
         )
         upload_url_response.raise_for_status()
@@ -82,10 +89,13 @@ def upload_to_yandex_disk(file_path):
 
 if __name__ == "__main__":
     print("Скрипт резервного копирования запущен.")
+    # Запускаем задачу сразу при старте
+    job()
+    # И по расписанию каждый день
     schedule.every().day.at("02:00").do(job)
     
     # Для тестирования можно запустить каждые 5 минут:
-    #schedule.every(5).seconds.do(job)
+    # schedule.every(5).minutes.do(job)
 
     while True:
         schedule.run_pending()

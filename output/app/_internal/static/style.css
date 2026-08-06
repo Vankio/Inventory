@@ -1,0 +1,1439 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    zoom: 0.9;
+    font-family: 'Roboto', sans-serif;
+    background-color: #f4f7f6; /* Lighter, cleaner background */
+    color: #333;
+    display: flex;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background: linear-gradient(180deg, #0f2027 0%, #203a43 50%, #2c5364 100%); /* Dark, elegant gradient */
+    border-right: none;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    height: 111.11vh;
+    overflow-y: auto;
+    transition: none;
+    box-shadow: 5px 0 25px rgba(0,0,0,0.3); /* Deeper shadow for more depth */
+    z-index: 1001;
+}
+
+.sidebar.collapsed {
+    width: 80px; /* Width for collapsed sidebar to show icons */
+}
+
+.sidebar.collapsed .nav-text {
+    display: none;
+}
+
+.sidebar.collapsed .nav-arrow {
+    display: none;
+}
+
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 12px 10px;
+}
+
+.sidebar.collapsed .nav-icon {
+    margin-right: 0;
+}
+
+.sidebar.collapsed .sidebar-header .nav-text {
+    display: none;
+}
+
+.sidebar.collapsed .submenu {
+    background-color: rgba(0,0,0,0.2); /* Darker submenu */
+}
+
+.sidebar-header {
+    padding: 10px 0; /* Adjusted padding */
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 10px 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    color: #e0f2fe; /* Bright text for contrast */
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease, border-left-color 0.2s ease; /* Faster transition */
+    cursor: pointer;
+    font-weight: 500;
+    border-left: 4px solid transparent; /* Accent border */
+    width: 100%;
+}
+
+.sidebar-toggle-main {
+    position: fixed;
+    top: 50%;
+    left: 260px; /* Initial position matching sidebar width */
+    transform: translateY(-50%);
+    width: 25px;
+    height: 50px;
+    background-color: #021729;
+    color: white;
+    border: none;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    cursor: pointer;
+    z-index: 1002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: none;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+}
+
+.sidebar-toggle-main.collapsed {
+    left: 80px; /* Position next to the collapsed sidebar */
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05); /* Subtle glassmorphism effect */
+    color: #ffffff;
+    border-left: 4px solid #16a085; /* Teal accent */
+}
+
+.nav-item.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-left: 4px solid #16a085;
+}
+
+.nav-icon {
+    font-size: 20px;
+    margin-right: 12px;
+    width: 24px;
+    text-align: center;
+}
+
+.nav-text {
+    flex: 1;
+    font-size: 14px;
+}
+
+.nav-arrow {
+    font-size: 12px;
+    color: #e0f2fe;
+    transition: transform 0.3s ease;
+}
+
+.nav-arrow.rotated {
+    transform: rotate(90deg);
+}
+
+.has-submenu {
+    position: relative;
+    cursor: pointer;
+}
+
+.sidebar.collapsed .has-submenu .submenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 80px; /* Match collapsed sidebar width */
+    background: #0f2027; /* Match sidebar background */
+    z-index: 1003;
+}
+
+.submenu {
+    max-height: 0;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.2); /* Darker submenu */
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.no-transition .submenu {
+    transition: none;
+    opacity: 0;
+}
+
+.submenu.active {
+    opacity: 1;
+    max-height: 500px; /* Adjust as needed, should be larger than the submenu's content */
+}
+
+.submenu-item {
+    padding-left: 20px !important;
+    font-size: 14px;
+    color: #e0f2fe !important;
+}
+
+.submenu-item:hover {
+    background-color: #16a085 !important;
+    color: #ffffff !important;
+}
+
+.sidebar.collapsed .submenu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar.collapsed .submenu-item.active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    margin-left: 260px; /* Match sidebar width */
+    padding: 30px 50px; /* More padding */
+    min-height: 100vh;
+    transition: none;
+    position: relative;
+}
+
+.main-content.sidebar-collapsed {
+    margin-left: 80px; /* Adjust margin to match collapsed sidebar width */
+}
+
+.sidebar.collapsed .submenu {
+    display: block;
+    background-color: transparent;
+    padding-left: 0;
+    box-shadow: none;
+    width: auto;
+}
+
+.sidebar.collapsed .submenu-item {
+    justify-content: center;
+}
+
+.sidebar.collapsed .submenu-item .nav-text {
+    display: none;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #666;
+}
+
+.breadcrumb a {
+    color: #00529B;
+    text-decoration: none;
+}
+
+#sidebar-open-btn {
+    display: none;
+    margin-right: 15px;
+    font-size: 20px;
+    color: #333;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.home-icon {
+    font-size: 16px;
+}
+
+.configure-btn, .btn-login, .btn-logout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.configure-btn {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    color: #333;
+}
+
+.configure-btn:hover {
+    background-color: #f5f5f5;
+    transform: translateY(-1px);
+}
+
+.btn-login {
+    background: linear-gradient(45deg, #1abc9c 0%, #16a085 100%);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 15px -5px rgba(22, 160, 133, 0.5);
+}
+
+.btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px -5px rgba(22, 160, 133, 0.7);
+}
+
+.btn-logout {
+    background: linear-gradient(45deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 15px -5px rgba(192, 57, 43, 0.5);
+}
+
+.btn-logout:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px -5px rgba(192, 57, 43, 0.7);
+}
+
+/* Dashboard */
+.dashboard {
+    width: 100%;
+}
+
+.widgets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.widget {
+    background: #ffffff;
+    border-radius: 20px; /* More rounded corners */
+    padding: 25px;
+    box-shadow: 0 10px 30px -15px rgba(0, 0, 0, 0.2); /* Softer, more modern shadow */
+    cursor: pointer;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #e0e0e0;
+}
+
+.widget:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.3); /* More pronounced hover shadow */
+}
+
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.widget-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.widget-icon {
+    font-size: 24px;
+}
+
+.widget-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+}
+
+.central-count {
+    font-size: 48px;
+    font-weight: 700;
+    color: #999;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #e0e0e0;
+}
+
+.central-count.has-value {
+    color: #00529B;
+    border-color: #00529B;
+}
+
+.widget-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    padding: 4px 0;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.status-dot.status-1 {
+    background-color: #8CC63F;
+}
+
+.status-dot.status-2 {
+    background-color: #00A99D;
+}
+
+.status-dot.status-3 {
+    background-color: #9c27b0;
+}
+
+.status-dot.status-4 {
+    background-color: #ff9800;
+}
+
+.status-dot.status-5 {
+    background-color: #f44336;
+}
+
+.status-dot.status-6 {
+    background-color: #757575;
+}
+
+.status-dot.status-7 {
+    background-color: #FF1493;
+}
+
+.status-dot.status-8 {
+    background-color: #353334;
+}
+
+.status-label {
+    flex: 1;
+    color: #666;
+}
+
+.status-count {
+    font-weight: 600;
+    color: #333;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* Category Page */
+.category-content {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 8px 25px -8px rgba(0, 82, 155, 0.15); /* Branded shadow */
+}
+
+.category-content h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.equipment-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.equipment-table thead {
+    background-color: #eaf6ff; /* Lighter, more subtle header */
+}
+
+.equipment-table th {
+    padding: 12px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: #333; /* Darker text for better readability */
+    border-bottom: 2px solid #d0dbe5;
+    vertical-align: middle;
+}
+
+.equipment-table td {
+    padding: 12px;
+    border-bottom: 1px solid #eaf6ff;
+    font-size: 14px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.equipment-table tbody tr:hover {
+    background-color: #fdfdff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transform: scale(1.01);
+    transition: all 0.2s ease-in-out;
+}
+
+.id-column {
+    width: 30px; /* Уменьшаем ширину столбца для значка */
+    text-align: center;
+}
+
+.history-icon {
+    font-size: 16px;
+    color: #8CC63F; /* New green color for history icon */
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.history-icon:hover {
+    color: #6a9a31; /* Darker green on hover */
+}
+
+.status-select {
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+.status-select:hover {
+    border-color: #00529B;
+}
+
+.btn-delete {
+    color: #f44336;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    margin-left: 8px;
+}
+
+.btn-delete:hover {
+    background-color: #ffebee;
+}
+
+.btn-edit {
+    color: #00529B;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.btn-edit:hover {
+    background-color: #e0f2fe;
+}
+
+.component-info {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.component-info strong {
+    color: #333;
+    font-weight: 600;
+}
+
+/* Form Styles */
+.equipment-form {
+    max-width: 600px;
+    margin-top: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #00529B;
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 30px;
+}
+
+.btn-primary {
+    padding: 12px 24px;
+    background: linear-gradient(45deg, #16a085 0%, #f4d03f 100%); /* New vibrant gradient */
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px -5px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 20px -5px rgba(0, 0, 0, 0.3);
+}
+
+.btn-secondary {
+    padding: 12px 24px;
+    background-color: #fff;
+    color: #666;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+    transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+    background-color: #f5f5f5;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: #fcfcfc; /* Slightly off-white background */
+    margin: 5% auto; /* Центрирование по вертикали, авто по горизонтали */
+    padding: 0;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2); /* Stronger shadow */
+    position: relative; /* Для позиционирования крестика закрытия */
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh; /* Ограничиваем высоту модального окна */
+    border: 1px solid #e0e0e0; /* Subtle border */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+    flex-grow: 1; /* Чтобы заголовок занимал все доступное пространство */
+}
+
+.modal-close {
+    font-size: 28px;
+    font-weight: bold;
+    color: #999;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+    position: absolute; /* Абсолютное позиционирование */
+    top: 15px; /* Отступ сверху */
+    right: 20px; /* Отступ справа */
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px 30px; /* Уменьшим padding сверху/снизу, чтобы дать больше места контенту */
+    flex-grow: 1; /* Позволяет телу модального окна занимать все доступное пространство */
+    overflow-y: auto; /* Прокрутка только для тела */
+    -webkit-overflow-scrolling: touch; /* Для плавного скроллинга на iOS */
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 15px 30px; /* Уменьшим padding сверху/снизу */
+    border-top: 1px solid #e0e0e0;
+    background-color: #f8f9fa; /* Добавим легкий фон */
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.components-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.component-group {
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.component-group:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.component-group h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #343a40;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.component-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.component-select:focus {
+    outline: none;
+    border-color: #00529B;
+}
+
+.multiple-indicator {
+    font-size: 0.85em;
+    color: #6c757d;
+    font-weight: normal;
+    margin-left: 8px;
+    background-color: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 8px;
+}
+
+.checkbox-container {
+    display: block;
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 20px;
+    width: 20px;
+    background-color: #eee;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    transition: all 0.2s;
+}
+
+.checkbox-container:hover input ~ .checkmark {
+    background-color: #ccc;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+}
+
+.checkbox-container .checkmark:after {
+    left: 7px;
+    top: 3px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    -webkit-transform: rotate(45deg);
+    -ms-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+
+.btn-select-components {
+    padding: 10px 20px;
+    background-color: #fff;
+    color: #00529B;
+    border: 2px solid #00529B;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
+}
+
+.btn-select-components:hover {
+    background-color: #00529B;
+    color: #fff;
+}
+
+.btn-write-components {
+    padding: 10px 20px;
+    background-color: #fff;
+    color: #00529B;
+    border: 2px solid #00529B;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-write-components:hover {
+    background-color: #00529B;
+    color: #fff;
+}
+
+.selected-components {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selected-component-item {
+    padding: 10px 15px;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #333;
+}
+
+.components-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.component-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background-color: #e0f2fe;
+    color: #00529B;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 2px;
+}
+
+.text-muted {
+    color: #999;
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+    }
+    
+    .main-content {
+        margin-left: 200px;
+        padding: 15px 20px;
+    }
+    
+    .widgets-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    align-items: center; /* Выравнивание элементов по центру */
+    position: relative;
+    z-index: 10;
+}
+
+.edit-manual-components-btn {
+    background: none;
+    border: none;
+    font-size: 18px; /* Размер карандаша */
+    cursor: pointer;
+    color: #00529B; /* Pencil color */
+    margin-left: 10px; /* Отступ от текста */
+    transition: color 0.2s;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
+}
+
+.edit-manual-components-btn:hover {
+    color: #00417a; /* Hover color */
+}
+
+.manual-components-edit-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    margin-top: 10px;
+    position: relative;
+    z-index: 10;
+}
+
+.form-group-modal {
+    margin-bottom: 15px;
+}
+
+.form-group-modal label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 13px;
+    color: #555;
+}
+
+.form-group-modal input {
+    width: 100%;
+    padding: 10px 12px; /* Увеличим padding */
+    border: 1px solid #e0e0e0; /* Соответствие основному стилю */
+    border-radius: 6px; /* Соответствие основному стилю */
+    font-size: 14px;
+    font-family: inherit; /* Наследуем шрифт */
+    transition: border-color 0.2s;
+}
+
+.form-group-modal input:focus {
+    outline: none;
+    border-color: #00529B; /* Focus color */
+}
+
+.manual-components-container {
+    position: relative;
+}
+
+.btn-show-more {
+    background: none;
+    border: none;
+    color: #00529B;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    margin-top: 5px;
+}
+
+.manual-components-list {
+    margin-top: 10px;
+    padding-left: 15px;
+    border-left: 2px solid #e0e0e0;
+}
+
+.computer-action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.computer-action-buttons a {
+    display: block;
+    text-align: left;
+}
+
+.comment-editor {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.comment-editor .comment-input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.comment-editor .comment-input:focus {
+    outline: none;
+    border-color: #00529B;
+}
+
+.comment-editor .save-comment-btn {
+    padding: 6px 12px;
+    background-color: #8CC63F;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+.comment-editor .save-comment-btn:hover {
+    background-color: #6a9a31;
+}
+
+/* Comment Tooltip Styles */
+.comment-column {
+    width: 30px;
+    text-align: center;
+}
+
+.tooltip-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.comment-icon {
+    font-size: 16px;
+    color: #888;
+}
+
+.tooltip-container:hover .comment-icon {
+    color: #00529B;
+}
+
+.tooltip-content {
+    visibility: hidden;
+    width: 250px;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; /* Position above the icon */
+    left: 50%;
+    margin-left: -125px; /* Center the tooltip */
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 13px;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+}
+
+.tooltip-container:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Help Page Styles */
+.help-description {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 30px;
+    text-align: center;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.help-item {
+    background-color: #ffffff; /* Changing back to white and will add border */
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.help-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+
+.help-item-icon {
+    font-size: 28px;
+    color: #ffffff; /* White icon color */
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-image: linear-gradient(to top, #00529B, #00A99D); /* Gradient for icon background */
+    border-radius: 50%;
+}
+
+.help-item-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.help-item-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.help-item-range {
+    font-size: 14px;
+    color: #777;
+    margin-top: 2px;
+}
+
+/* Стили для фильтров в заголовках таблицы */
+.filter-header {
+    position: relative;
+    cursor: pointer;
+}
+
+.filter-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.filter-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%; /* Позиционируем строго под родителем */
+    left: 0; /* Выравниваем по левому краю */
+    background-color: #f9f9f9;
+    min-width: max-content; /* Ширина по самому длинному элементу */
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #ddd;
+}
+
+.filter-dropdown a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    text-align: left; /* Текст по левому краю для аккуратности */
+    white-space: nowrap; /* Запрещаем перенос текста */
+}
+
+.filter-dropdown a:hover {
+    background-color: #f1f1f1;
+}
+
+.filter-header:hover .filter-dropdown {
+    display: block;
+}
+
+.filter-arrow {
+    margin-left: 5px;
+    font-size: 0.8em;
+}
+
+.filter-dropdown a.active {
+    background-color: #e0e0e0;
+    font-weight: bold;
+}
+
+
+/* Fix for help-item links */
+a.help-item, a.help-item:visited {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.help-item:hover {
+    color: inherit;
+}
+
+.clickable-row {
+    cursor: pointer;
+}
+
+.clickable-row:hover {
+    background-color: #f0f8ff !important;
+}
+
+/* Component List Styles */
+.modal-footer .btn-primary {
+    background: linear-gradient(45deg, #28a745 0%, #218838 100%);
+}
+
+.modal-footer .btn-primary:hover {
+    box-shadow: 0 7px 20px -5px rgba(40, 167, 69, 0.4);
+}
+
+.components-list {
+    margin-top: 15px;
+    padding-left: 5px;
+}
+
+.component-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.component-item:last-child {
+    border-bottom: none;
+}
+
+.component-type {
+    font-weight: 600;
+    color: #333;
+    flex-basis: 150px;
+    flex-shrink: 0;
+    margin-right: 20px;
+}
+
+.component-details {
+    flex-grow: 1;
+}
+
+.component-details a {
+    color: #00529B;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.component-details a:hover {
+    text-decoration: underline;
+}
+
+.component-details span {
+    color: #555;
+}
+
+.sub-component {
+    margin-top: 5px;
+    padding-left: 15px;
+}
+
+.manual-components {
+    border-top: 1px solid #e0e0e0;
+    margin-top: 20px;
+    padding-top: 10px;
+}
+
+/* Search Bar */
+.search-container {
+    margin-bottom: 20px;
+}
+
+.search-form {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border-radius: 25px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 350px;
+    transition: width 0.3s ease-in-out;
+}
+
+.main-content:not(.sidebar-collapsed) .header + .search-container .search-form {
+    width: 300px;
+}
+
+.search-form:focus-within {
+    width: 450px;
+}
+
+.main-content:not(.sidebar-collapsed) .header + .search-container .search-form:focus-within {
+    width: 600px;
+}
+
+.search-input {
+    border: none;
+    outline: none;
+    padding: 8px 15px;
+    font-size: 14px;
+    flex-grow: 1;
+    background-color: transparent;
+    border-radius: 25px;
+}
+
+.search-button {
+    background: none;
+    border: none;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 16px;
+    color: #555;
+}
+
+.search-button:hover {
+    color: #00529B;
+}
+
+/* Специальные стили для поиска на главной странице */
+body:has(.dashboard) .search-container {
+    position: absolute;
+    left: 90px; /* Расположим плашку левее, ближе к сайдбару */
+    top: 30px; /* Выровняем по вертикали с хедером */
+    margin-bottom: 20px;
+    z-index: 1000;
+}
+
+body:has(.dashboard) .main-content.sidebar-collapsed .search-container {
+    left: 60px; /* При свернутом сайдбаре */
+}
+
+@media (max-width: 768px) {
+    body:has(.dashboard) .search-container {
+        position: static;
+        margin: 20px auto;
+        width: 90%;
+    }
+    
+    body:has(.dashboard) .main-content.sidebar-collapsed .search-container {
+        left: auto;
+    }
+}
+
+/* Filter Bar for Search */
+.filter-bar {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 25px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.filter-bar .form-group {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-bar label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.filter-bar .form-control {
+    width: auto;
+    min-width: 150px;
+}
+
+.filter-bar .btn-primary {
+    padding: 10px 20px;
+    font-size: 14px;
+}
+
+/* Custom styles for search result checkboxes */
+.checkbox-cell {
+    /* To move the checkbox left, we can adjust padding.
+       The default padding is 12px. Let's reduce it on the left. */
+    padding-left: 5px;
+    padding-right: 5px;
+    width: 40px; /* Give it a fixed width */
+}
+
+.row-checkbox {
+    /* Makes the checkbox bigger */
+    transform: scale(1.4);
+}

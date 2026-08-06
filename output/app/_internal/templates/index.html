@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Сводка - Инвентаризация оборудования{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="breadcrumb">
+        <span>/</span>
+        <span class="home-icon"><i class="fas fa-home"></i></span>
+    </div>
+    <div class="header-buttons">
+        {% if user_session %}
+            <a href="{{ url_for('logout') }}" class="btn-logout">
+                <span>🔓</span>
+                <span>Выйти ({{ user_session.role }})</span>
+            </a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="btn-login">
+                <span>🔒</span>
+                <span>Войти</span>
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard">
+    <div class="widgets-grid">
+        {% for eq_type, eq_data in equipment_types.items() %}
+        <div class="widget" onclick="window.location.href='{{ url_for('category_view', category=eq_type) }}'">
+            <div class="widget-header">
+                <h3 class="widget-title">{{ eq_type }}</h3>
+                <span class="widget-icon"><i class="{{ eq_data.icon }}"></i></span>
+            </div>
+            <div class="widget-center">
+                {% set installed_count = stats[eq_type].get('Установленные', 0) %}
+                {% if installed_count > 0 %}
+                    <div class="central-count has-value" style="border-color: #2196f3; color: #2196f3;">
+                        {{ installed_count }}
+                    </div>
+                {% else %}
+                    <div class="central-count">
+                        0
+                    </div>
+                {% endif %}
+            </div>
+            <div class="widget-status-list">
+                {% for status in eq_data.statuses %}
+                {% set status_count = stats[eq_type].get(status, 0) %}
+                <div class="status-item">
+                    <span class="status-dot status-{{ loop.index }}"></span>
+                    <span class="status-label">{{ status }}</span>
+                    <span class="status-count">{{ status_count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

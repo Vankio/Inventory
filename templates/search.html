@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Результаты поиска - {{ query }}{% endblock %}
+
+{% block content %}
+<div class="category-content">
+    <h1>Результаты поиска по запросу: "{{ query }}"</h1>
+
+    <form method="get" action="{{ url_for('search') }}" class="filter-bar">
+        <input type="hidden" name="query" value="{{ query }}">
+        <div class="form-group">
+            <label for="sort_by">Сортировать по:</label>
+            <select name="sort_by" id="sort_by" class="form-control">
+                <option value="id" {% if sort_by == 'id' %}selected{% endif %}>ID</option>
+                <option value="type" {% if sort_by == 'type' %}selected{% endif %}>Тип</option>
+                <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Название</option>
+                <option value="inventory_number" {% if sort_by == 'inventory_number' %}selected{% endif %}>Инвентарный номер</option>
+                <option value="status" {% if sort_by == 'status' %}selected{% endif %}>Статус</option>
+                <option value="department" {% if sort_by == 'department' %}selected{% endif %}>Отдел</option>
+                <option value="purchase_date" {% if sort_by == 'purchase_date' %}selected{% endif %}>Дата покупки</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="sort_order">Порядок:</label>
+            <select name="sort_order" id="sort_order" class="form-control">
+                <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Возрастание</option>
+                <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Убывание</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary">Сортировать</button>
+    </form>
+
+    {% if results or archived_results %}
+        <h2>Активное оборудование</h2>
+        {% if results %}
+        <table class="equipment-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Тип</th>
+                    <th>Название</th>
+                    <th>Инвентарный номер</th>
+                    <th>Статус</th>
+                    <th>Отдел</th>
+                    <th>Дата покупки</th>
+                    <th>Действия</th>
+                    {% if user_session.role == 'Администратор' %}<th> </th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in results %}
+                <tr class="clickable-row" data-href="{{ url_for('view_equipment', id=item.id) }}">
+                    <td>{{ item.id }}</td>
+                    <td><i class="{{ equipment_types[item.type].icon }}"></i> {{ item.type }}</td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.inventory_number }}</td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.department }}</td>
+                    <td>
+                        {% if item.purchase_date %}
+                            {{ item.purchase_date | format_date }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('edit_equipment', id=item.id) }}" class="btn-edit"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('archive_equipment', id=item.id) }}" class="btn-delete" onclick="return confirm('Вы уверены, что хотите архивировать этот элемент?');"><i class="fas fa-archive"></i></a>
+                    </td>
+                    {% if user_session.role == 'Администратор' %}
+                    <td class="checkbox-cell" onclick="event.stopPropagation();">
+                        <input type="checkbox" class="row-checkbox">
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Нет активного оборудования по вашему запросу.</p>
+        {% endif %}
+
+        {% if archived_results %}
+        <h2 style="margin-top: 30px;">Архивное оборудование</h2>
+        <table class="equipment-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Тип</th>
+                    <th>Название</th>
+                    <th>Инвентарный номер</th>
+                    <th>Статус</th>
+                    <th>Отдел</th>
+                    <th>Дата покупки</th>
+                    <th>Действия</th>
+                    {% if user_session.role == 'Администратор' %}<th> </th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in archived_results %}
+                <tr class="clickable-row" data-href="{{ url_for('view_equipment', id=item.id) }}">
+                    <td>{{ item.id }}</td>
+                    <td><i class="{{ equipment_types[item.type].icon }}"></i> {{ item.type }}</td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.inventory_number }}</td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.department }}</td>
+                    <td>
+                        {% if item.purchase_date %}
+                            {{ item.purchase_date | format_date }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('unarchive_equipment', id=item.id) }}" class="btn-edit" onclick="return confirm('Вы уверены, что хотите восстановить этот элемент из архива?');"><i class="fas fa-undo"></i></a>
+                        <a href="{{ url_for('delete_equipment', id=item.id) }}" class="btn-delete" onclick="return confirm('Вы уверены, что хотите НАВСЕГДА удалить этот элемент?');"><i class="fas fa-trash"></i></a>
+                    </td>
+                    {% if user_session.role == 'Администратор' %}
+                    <td class="checkbox-cell" onclick="event.stopPropagation();">
+                        <input type="checkbox" class="row-checkbox">
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+    {% else %}
+        <p>Ничего не найдено.</p>
+    {% endif %}
+</div>
+{% endblock %}

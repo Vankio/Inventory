@@ -1,10 +1,25 @@
 @echo off
 echo Activating virtual environment...
-call .venv\Scripts\activate
+
+:: Проверка наличия окружения
+if not exist ".venv\Scripts\activate.bat" (
+    echo ERROR: Virtual environment '.venv' not found!
+    echo Please run this command first: python -m venv .venv
+    pause
+    exit /b
+)
+
+call .venv\Scripts\activate.bat
+
 echo Installing dependencies...
-python -m pip install requests schedule
+py -m pip install --upgrade pip
+py -m pip install requests schedule flask-wtf pandas xlsxwriter
+
+echo Starting backup script in a new window...
+start "Backup" python backup.py
+
 echo Starting Flask server...
-echo Starting backup script in the background...
-start "Backup" /B python backup.py
-echo Starting Flask server...
-python -m flask run --debug --host=0.0.0.0
+py app.py
+
+:: Окно не закроется, если сервер упадет с ошибкой
+pause

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Требует внимания - Инвентаризация{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="breadcrumb">
+        <a href="{{ url_for('index') }}"><i class="fas fa-home"></i></a>
+        <span>/</span>
+        <span>Требует внимания</span>
+    </div>
+</div>
+
+<div class="category-content">
+    <h1><i class="fas fa-triangle-exclamation" style="color: var(--color-warning);"></i> Требует внимания</h1>
+    <p style="color: var(--color-text-secondary); margin-bottom: 10px;">
+        Оборудование во всех категориях со статусом «Сломанные», «Ремонтируются», «Списание», «Пустые» или «Заправляются».
+    </p>
+
+    {% if items %}
+    <div class="table-wrapper">
+        <table class="equipment-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Тип</th>
+                    <th>Название</th>
+                    <th>Инв. номер</th>
+                    <th>Отдел</th>
+                    <th>Стоимость</th>
+                    <th>Статус</th>
+                    <th>Дата создания</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="clickable-row" data-href="{{ url_for('view_equipment', id=item['id']) }}">
+                    <td>{{ item['id'] }}</td>
+                    <td><i class="{{ equipment_types[item['type']].icon }}"></i> {{ item['type'] }}</td>
+                    <td>{{ item['name'] or '-' }}</td>
+                    <td>{{ item['inventory_number'] or '-' }}</td>
+                    <td>{{ item['department'] or '-' }}</td>
+                    <td>{{ item['price'] if item['price'] else '-' }}</td>
+                    <td><span class="status-badge status-decommission">{{ item['status'] }}</span></td>
+                    <td>{{ item['created_at'] | format_datetime }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>Оборудования, требующего внимания, сейчас нет.</p>
+    {% endif %}
+</div>
+{% endblock %}

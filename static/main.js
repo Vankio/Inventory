@@ -83,6 +83,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Make rows clickable
+    const clickableRows = document.querySelectorAll('.clickable-row');
+    clickableRows.forEach(row => {
+        row.addEventListener('click', (e) => {
+            // Stop propagation to avoid conflicts with buttons inside the row
+            if (e.target.closest('a, select, input, button, .btn-edit, .btn-delete')) {
+                return;
+            }
+            if (row.dataset.href) {
+                if (e.ctrlKey) {
+                    window.open(row.dataset.href, '_blank');
+                } else {
+                    window.location.href = row.dataset.href;
+                }
+            }
+        });
+    });
+
     // Remove the no-transition class after the page is loaded to re-enable animations
     window.addEventListener('load', () => {
         document.body.classList.remove('no-transition');

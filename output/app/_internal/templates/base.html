@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Инвентаризация оборудования{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+    <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+    <meta name="theme-color" content="#ffffff">
+    <script src="{{ url_for('static', filename='main.js', v='2') }}" defer></script>
+    <style>
+        .multiple-indicator {
+            font-size: 0.8em;
+            color: #888;
+            font-weight: normal;
+            margin-left: 5px;
+        }
+        .checkbox-container {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .checkbox-container input {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body class="no-transition">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <a href="{{ url_for('index') }}" class="nav-item {% if request.path == '/' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-home"></i></span>
+                <span class="nav-text">Сводка</span>
+            </a>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('category_view', category='Компьютеры') }}" class="nav-item {% if category == 'Компьютеры' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-desktop"></i></span>
+                <span class="nav-text">Компьютеры</span>
+            </a>
+            <div class="nav-item has-submenu {% if is_component_category %}active{% endif %}" id="components-menu-toggle">
+                <span class="nav-icon"><i class="fas fa-cogs"></i></span>
+                <span class="nav-text">Комплектующие</span>
+                <span class="nav-arrow"><i class="fas fa-chevron-right {% if is_component_category %}rotated{% endif %}"></i></span>
+            </div>
+            <div class="submenu {% if is_component_category %}active{% endif %}" id="components-submenu">
+                {% if equipment_types.get('Компьютеры') %}
+                    {% if equipment_fields.get('Компьютеры') and equipment_fields['Компьютеры'].get('components') %}
+                        {% for comp_type in equipment_fields['Компьютеры']['components'] %}
+                        <a href="{{ url_for('category_view', category=comp_type) }}" class="nav-item submenu-item {% if category == comp_type %}active{% endif %}">
+                            <span class="nav-icon submenu-icon"><i class="{{ equipment_types[comp_type].icon }}"></i></span>
+                            <span class="nav-text">{{ comp_type }}</span>
+                        </a>
+                        {% endfor %}
+                    {% endif %}
+                {% endif %}
+            </div>
+            <a href="{{ url_for('category_view', category='Мониторы') }}" class="nav-item {% if category == 'Мониторы' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-tv"></i></span>
+                <span class="nav-text">Мониторы</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Мыши') }}" class="nav-item {% if category == 'Мыши' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-mouse"></i></span>
+                <span class="nav-text">Мыши</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Клавиатуры') }}" class="nav-item {% if category == 'Клавиатуры' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-keyboard"></i></span>
+                <span class="nav-text">Клавиатуры</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Наушники') }}" class="nav-item {% if category == 'Наушники' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-headphones"></i></span>
+                <span class="nav-text">Наушники</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Оборудование') }}" class="nav-item {% if category == 'Оборудование' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-tools"></i></span>
+                <span class="nav-text">Оборудование</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Принтеры') }}" class="nav-item {% if category == 'Принтеры' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-print"></i></span>
+                <span class="nav-text">Принтеры</span>
+            </a>
+            <a href="{{ url_for('category_view', category='Картриджи') }}" class="nav-item {% if category == 'Картриджи' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-tint"></i></span>
+                <span class="nav-text">Картриджи</span>
+            </a>
+            <a href="{{ url_for('help_page') }}" class="nav-item {% if request.path == url_for('help_page') %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-question-circle"></i></span>
+                <span class="nav-text">Справка</span>
+            </a>
+            {% if user_session and user_session.role in ['Администратор', 'Бухгалтер', 'АДС'] %}
+            <a href="{{ url_for('accountant_history') }}" class="nav-item {% if request.path == url_for('accountant_history') %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-history"></i></span>
+                <span class="nav-text">История оборудования</span>
+            </a>
+            <a href="{{ url_for('movements_view') }}" class="nav-item {% if request.path == url_for('movements_view') %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
+                <span class="nav-text">Перемещения</span>
+            </a>
+            {% endif %}
+        </nav>
+        <a href="{{ url_for('archive_view') }}" class="nav-item {% if request.path == url_for('archive_view') %}active{% endif %}">
+            <span class="nav-icon"><i class="fas fa-archive"></i></span>
+            <span class="nav-text">Архив</span>
+        </a>
+    </div>
+
+    <div class="main-content">
+        <button class="sidebar-toggle-main" id="sidebar-toggle-btn">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        {% if request.path != url_for('login') %}
+        <div class="search-container">
+            <form action="{{ url_for('search') }}" method="get" class="search-form">
+                <input type="text" name="query" placeholder="Поиск оборудования..." class="search-input" id="search-input">
+                <button type="submit" class="search-button">
+                    <i class="fas fa-search"></i>
+                </button>
+            </form>
+        </div>
+        {% endif %}
+        <div id="content-area">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

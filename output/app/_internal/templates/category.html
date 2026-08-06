@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category }} - Инвентаризация{% endblock %}
+
+{% block content %}
+        <div class="header">
+            <div class="breadcrumb">
+                <a href="{{ url_for('index') }}"><i class="fas fa-home"></i></a>
+                <span>/</span>
+                <span>{{ category }}</span>
+            </div>
+            <div class="header-buttons">
+                {% if user_session %}
+                    <a href="{{ url_for('export_excel', category=category) }}" class="configure-btn">
+                        <span>📄</span>
+                        <span>Экспорт в Excel</span>
+                    </a>
+                    {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                    <a href="{{ url_for('add_equipment', category=category) }}" class="configure-btn">
+                        <span>➕</span>
+                        <span>Добавить</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="category-content">
+            <h1><i class="{{ category_icon }}"></i> {{ category }}</h1>
+
+            <div class="table-wrapper">
+            <table class="equipment-table">
+                <thead>
+                    <tr>
+                        <th class="id-column"></th> {# Пустой заголовок для значка истории #}
+                        <th class="comment-column"></th> {# Пустой заголовок для значка комментария #}
+                        <th>{{ field_labels.get('inventory_number', 'Инвентарный номер') }}</th>
+                        <th>{{ field_labels.get('name', 'Название') }}</th>
+                        <th class="filter-header">
+                            <div class="filter-wrapper">
+                                {{ field_labels.get('department', 'Отдел') }} <i class="fas fa-caret-down filter-arrow"></i>
+                                <div class="filter-dropdown">
+                                    <a href="{{ url_for('category_view', category=category, status=selected_status, department='all') }}" class="{% if selected_department == 'all' %}active{% endif %}">Все</a>
+                                    {% for dep in departments %}
+                                    <a href="{{ url_for('category_view', category=category, status=selected_status, department=dep) }}" class="{% if selected_department == dep %}active{% endif %}">{{ dep }}</a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </th>
+                        <th class="filter-header">
+                            <div class="filter-wrapper">
+                                {{ field_labels.get('status', 'Статус') }} <i class="fas fa-caret-down filter-arrow"></i>
+                                <div class="filter-dropdown">
+                                    <a href="{{ url_for('category_view', category=category, department=selected_department, status='all') }}" class="{% if selected_status == 'all' %}active{% endif %}">Все</a>
+                                    {% for stat in equipment_types[category].statuses %}
+                                    <a href="{{ url_for('category_view', category=category, department=selected_department, status=stat) }}" class="{% if selected_status == stat %}active{% endif %}">{{ stat }}</a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </th>
+                        {% if category_fields_config.needs_components %}
+                            {% for comp_type in equipment_fields['Компьютеры']['components'] %}
+                            <th>{{ comp_type }}</th>
+                            {% endfor %}
+                        {% else %}
+                            {% for field in category_fields_config.fields %}
+                                {% if field != 'name' %}
+                                    <th>{{ field_labels.get(field, field) }}</th>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        <th>{{ field_labels.get('created', 'Дата создания') }}</th>
+                        <th>{{ field_labels.get('purchase_date', 'Дата покупки') }}</th>
+                        <th>Перемещение</th>
+                        <th>PDF</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in equipment %}
+                    <tr class="clickable-row" data-href="{{ url_for('view_equipment', id=item.id) }}">
+                        <td class="id-column">
+                            <a href="{{ url_for('history_view', equipment_id=item.id) }}" title="История изменений">
+                                <span class="history-icon">🕒</span>
+                            </a>
+                        </td>
+                        <td class="comment-column">
+                            {% if item.comment %}
+                            <div class="tooltip-container">
+                                <span class="comment-icon">💬</span>
+                                <div class="tooltip-content">{{ item.comment }}</div>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.inventory_number and item.inventory_number.strip() %}
+                                {{ item.inventory_number }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.name and item.name.strip() %}
+                                {{ item.name }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.department and item.department.strip() %}
+                                {{ item.department }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                            <select class="status-select" data-id="{{ item.id }}" onchange="updateStatus({{ item.id }}, this.value)">
+                                {% for status in equipment_types[category].statuses %}
+                                <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                                {{ item.status }}
+                            {% endif %}
+                        </td>
+                        {% if category_fields_config.needs_components %}
+                            {% for comp_type in equipment_fields['Компьютеры']['components'] %}
+                            <td>
+                                {% set manual_comp_details = item.details_parsed.manual_components.get(comp_type) if item.details_parsed and item.details_parsed.get('manual_components') else None %}
+                                {% if manual_comp_details %}
+                                    <div class="component-info">
+                                        {% if comp_type == 'Процессор' %}
+                                            <strong>{{ manual_comp_details.get('name') }}</strong>
+                                            {% if manual_comp_details.get('model') %}<br><span><strong>{{ manual_comp_details.model }}</strong></span>{% endif %}
+                                            {% if manual_comp_details.get('frequency') %}<br><span class="text-muted">{{ manual_comp_details.frequency }} ГГц</span>{% endif %}
+                                            {% if manual_comp_details.get('cores') %}<br><span class="text-muted">{{ manual_comp_details.cores }} ядра</span>{% endif %}
+                                        {% elif comp_type == 'Оперативная память' %}
+                                            {% if manual_comp_details.get('name') %}
+                                                <strong>{{ manual_comp_details.get('name') }}</strong><br>
+                                            {% endif %}
+                                            {% if manual_comp_details.get('capacity') %}
+                                                <span class="text-muted">{{ manual_comp_details.capacity }} ГБ</span>
+                                            {% endif %}
+                                            {% if manual_comp_details.get('type') %}
+                                                <br><span class="text-muted">{{ manual_comp_details.type }}</span>
+                                            {% endif %}
+                                        {% elif comp_type == 'Хранение данных' %}
+                                            {% set storage_list = manual_comp_details if manual_comp_details is iterable and manual_comp_details is not string else [manual_comp_details] %}
+                                            {% for storage_item in storage_list %}
+                                                {% if storage_item and storage_item is mapping %}
+                                                    <div style="margin-bottom: 5px;">
+                                                        {% if storage_item.get('name') %}
+                                                            <strong>{{ storage_item.get('name') }}</strong><br>
+                                                        {% endif %}
+                                                        {% if storage_item.get('capacity') %}
+                                                            <span class="text-muted">{{ storage_item.get('capacity') }} ГБ</span>
+                                                        {% endif %}
+                                                        {% if storage_item.get('type') %}
+                                                            <br><span class="text-muted">{{ storage_item.get('type') }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% elif comp_type == 'Видеокарта' %}
+                                            {% if manual_comp_details.get('name') %}
+                                                <strong>{{ manual_comp_details.get('name') }}</strong><br>
+                                            {% endif %}
+                                            {% if manual_comp_details.get('model') %}
+                                                <span class="text-muted">{{ manual_comp_details.model }}</span>
+                                            {% endif %}
+                                            {% if manual_comp_details.get('memory') %}
+                                                <br><span class="text-muted">{{ manual_comp_details.memory }} ГБ</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <strong>{{ manual_comp_details.get('name') or manual_comp_details.get('model') or comp_type }}</strong>
+                                            {% if manual_comp_details.get('memory') %}<br><span class="text-muted">{{ manual_comp_details.memory }} ГБ</span>{% endif %}
+                                            {% if manual_comp_details.get('power') %}<br><span class="text-muted">{{ manual_comp_details.power }} Вт</span>{% endif %}
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    {% set comp_id = item.details_parsed.components.get(comp_type) if item.details_parsed and item.details_parsed.get('components') else None %}
+                                    {% if comp_id %}
+                                        {% set comp_key = item.id|string + '_' + comp_type %}
+                                        {% set comp_info = available_components.get(comp_key) %}
+                                        {% if comp_info %}
+                                            <div class="component-info">
+                                            {% for comp in comp_info %}
+                                                <div>
+                                                    <strong>{{ comp['name'] }}</strong>
+                                                    <br><span class="text-muted">{{ comp['formatted_details'] }}</span>
+                                                </div>
+                                            {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            ID: {{ comp_id }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            {% endfor %} {# endfor for comp_type #}
+                        {% else %}
+                            {% for field in category_fields_config.fields %}
+                                {% if field != 'name' %}
+                                    <td>
+                                        {% if item.details_parsed and item.details_parsed.get(field) %}
+                                            {{ item.details_parsed[field] }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        <td>
+                            {% if item.created_at %}
+                                {% if item.created_at %}
+                                    {{ item.created_at | format_datetime }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.purchase_date %}
+                                {{ item.purchase_date | format_date }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.movement %}
+                                {{ item.movement }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.pdf_path %}
+                                <a href="{{ url_for('download_pdf', filename=item.pdf_path.split('/')[-1]) }}" class="btn-download" download>📄</a>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user_session %}
+                                {% if category == 'Компьютеры' %}
+                                <div class="computer-action-buttons">
+                                    {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                                    <a href="{{ url_for('edit_equipment', id=item.id) }}" class="btn-edit">Редактировать</a>
+                                    {% endif %}
+                                    {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                                    <a href="{{ url_for('archive_equipment', id=item.id) }}" class="btn-delete" onclick="return confirm('Переместить в архив?')">🗄️ В архив</a>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                    {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                                    <a href="{{ url_for('edit_equipment', id=item.id) }}" class="btn-edit">Редактировать</a>
+                                    {% endif %}
+                                    {% if user_session.role in ['Администратор', 'Бухгалтер'] %}
+                                    <a href="{{ url_for('archive_equipment', id=item.id) }}" class="btn-delete" onclick="return confirm('Переместить в архив?')">🗄️ В архив</a>
+                                    {% endif %}
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not equipment %}
+                    <tr>
+                        <td colspan="{% if category_fields_config.needs_components %}{{ 11 + equipment_fields['Компьютеры']['components']|length }}{% else %}{{ 10 + category_fields_config.fields|length }}{% endif %}" style="text-align: center; padding: 20px;">Нет оборудования в этой категории</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateStatus(id, status) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch(`/update_status/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ status: status })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Статус обновлен');
+                // Если категория - "Компьютеры" и статус изменен на "Резерв", перезагружаем страницу
+                if ("{{ category }}" === "Компьютеры" && status === "Резерв") {
+                    window.location.reload();
+                }
+            }
+        })
+        .catch(error => console.error('Ошибка:', error));
+    }
+</script>
+{% endblock %}

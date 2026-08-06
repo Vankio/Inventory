@@ -4,84 +4,43 @@
 
 {% block content %}
 <style>
-    /* Стили для центрирования формы входа */
+    /* Только расположение блока входа — кнопки, поля и alert
+       используют общие стили из style.css */
     .login-wrapper {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
-        height: calc(100vh - 50px); /* Высота минус примерная высота хедера */
+        height: calc(100vh - 50px);
     }
     .login-container {
-        background: #fff;
-        padding: 40px;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        background: var(--color-surface, #fff);
+        padding: 44px 40px;
+        border-radius: var(--radius-lg, 16px);
+        box-shadow: var(--shadow-md, 0 10px 25px -10px rgba(15,23,42,0.18));
+        border: 1px solid var(--color-border, #e3e8ee);
         width: 100%;
         max-width: 400px;
         text-align: center;
     }
     .login-container h1 {
-        margin-bottom: 24px;
-        color: #333;
+        margin-bottom: 28px;
+        color: var(--color-text, #1f2a37);
+        font-size: 22px;
     }
-    .form-group {
-        margin-bottom: 20px;
+    .login-container .form-group {
         text-align: left;
     }
-    .form-group label {
-        display: block;
-        margin-bottom: 8px;
-        color: #555;
-        font-weight: 500;
-    }
-    .form-group input {
+    .login-container .btn-primary {
         width: 100%;
-        padding: 12px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        box-sizing: border-box;
-    }
-    .btn-primary {
-        width: 100%;
-        padding: 12px;
-        font-size: 16px;
-        background-color: #007bff;
-        color: white;
         border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.3s;
-    }
-    .btn-primary:hover {
-        background-color: #0056b3;
-    }
-    .alert {
-        padding: 15px;
-        margin-bottom: 20px;
-        border: 1px solid transparent;
-        border-radius: 4px;
-    }
-    .alert-danger {
-        color: #a94442;
-        background-color: #f2dede;
-        border-color: #ebccd1;
-    }
-    .alert-success {
-        color: #3c763d;
-        background-color: #dff0d8;
-        border-color: #d6e9c6;
-    }
-    .alert-info {
-        color: #31708f;
-        background-color: #d9edf7;
-        border-color: #bce8f1;
+        display: block;
     }
 </style>
 
 <div class="login-wrapper">
     <div class="login-container">
-        <h1>Вход в систему</h1>
+        <h1><i class="fas fa-lock" style="color: var(--color-primary, #0a5fa8); margin-right: 8px;"></i>Вход в систему</h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}

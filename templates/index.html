@@ -24,6 +24,120 @@
 </div>
 
 <div class="dashboard">
+
+    <!-- Сводные карточки -->
+    <div class="stat-cards-grid">
+        <div class="stat-card">
+            <div class="stat-card-icon stat-icon-primary"><i class="fas fa-cube"></i></div>
+            <div class="stat-card-info">
+                <span class="stat-card-value">{{ total_count }}</span>
+                <span class="stat-card-label">Всего оборудования</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon stat-icon-accent"><i class="fas fa-ruble-sign"></i></div>
+            <div class="stat-card-info">
+                <span class="stat-card-value">{{ "{:,.0f}".format(total_value).replace(',', ' ') }} ₽</span>
+                <span class="stat-card-label">Общая стоимость</span>
+            </div>
+        </div>
+        <a href="{{ url_for('attention_view') }}" class="stat-card stat-card-link">
+            <div class="stat-card-icon stat-icon-warning"><i class="fas fa-triangle-exclamation"></i></div>
+            <div class="stat-card-info">
+                <span class="stat-card-value">{{ attention_count }}</span>
+                <span class="stat-card-label">Требует внимания</span>
+            </div>
+        </a>
+        <div class="stat-card">
+            <div class="stat-card-icon stat-icon-purple"><i class="fas fa-folder"></i></div>
+            <div class="stat-card-info">
+                <span class="stat-card-value">{{ categories_count }}</span>
+                <span class="stat-card-label">Категорий</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Требует внимания / Последние операции -->
+    <div class="dashboard-panels">
+        <div class="panel-card">
+            <div class="panel-card-header">
+                <h3><i class="fas fa-triangle-exclamation" style="color: var(--color-warning);"></i> Требует внимания</h3>
+                <a href="{{ url_for('attention_view') }}" class="panel-link">Все →</a>
+            </div>
+            {% if attention_items %}
+            <table class="panel-table">
+                <thead>
+                    <tr>
+                        <th>Оборудование</th>
+                        <th>Тип</th>
+                        <th>Инв. номер</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in attention_items %}
+                    <tr class="clickable-row" data-href="{{ url_for('view_equipment', id=item['id']) }}">
+                        <td class="panel-table-name">{{ item['name'] or '-' }}</td>
+                        <td>{{ item['type'] }}</td>
+                        <td>{{ item['inventory_number'] or '-' }}</td>
+                        <td><span class="status-badge status-decommission">{{ item['status'] }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="panel-empty">Нет оборудования, требующего внимания</div>
+            {% endif %}
+        </div>
+
+        <div class="panel-card">
+            <div class="panel-card-header">
+                <h3><i class="fas fa-clock-rotate-left" style="color: var(--color-primary);"></i> Последние операции</h3>
+                {% if user_session and user_session.role in ['Администратор', 'Бухгалтер', 'АДС'] %}
+                <a href="{{ url_for('accountant_history') }}" class="panel-link">История →</a>
+                {% endif %}
+            </div>
+            {% if recent_activity %}
+            <div class="activity-list">
+                {% for record in recent_activity %}
+                <div class="activity-item {% if record['active_id'] %}activity-item-clickable clickable-row{% endif %}"
+                     {% if record['active_id'] %}data-href="{{ url_for('view_equipment', id=record['active_id']) }}"{% endif %}>
+                    <div class="activity-dot
+                        {% if record['field_name'] == 'created' %}activity-dot-accent
+                        {% elif record['new_value'] == 'Списание' %}activity-dot-danger
+                        {% elif record['field_name'] == 'status' %}activity-dot-warning
+                        {% else %}activity-dot-primary{% endif %}"></div>
+                    <div class="activity-body">
+                        <span class="activity-title">
+                            {{ record['equipment_name'] or 'Оборудование' }}
+                            <span class="text-muted" style="font-weight: 400;">({{ record['equipment_type'] }})</span>
+                        </span>
+                        <span class="activity-desc">
+                            {% if record['field_name'] == 'created' %}
+                                Добавлено в систему
+                            {% elif record['new_value'] == 'Списание' %}
+                                Списано
+                            {% elif record['field_name'] == 'status' %}
+                                Статус: {{ record['old_value'] or '-' }} → {{ record['new_value'] or '-' }}
+                            {% elif record['field_name'] == 'department' %}
+                                Перемещено: {{ record['old_value'] or 'без отдела' }} → {{ record['new_value'] or 'без отдела' }}
+                            {% else %}
+                                Изменено поле «{{ field_labels.get(record['field_name'], record['field_name']) }}»
+                            {% endif %}
+                        </span>
+                    </div>
+                    <span class="activity-date">{{ record['change_date'] | format_datetime }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="panel-empty">Нет операций</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Разбивка по категориям -->
+    <h2 class="dashboard-section-title">По категориям</h2>
     <div class="widgets-grid">
         {% for eq_type, eq_data in equipment_types.items() %}
         <div class="widget" onclick="window.location.href='{{ url_for('category_view', category=eq_type) }}'">
@@ -34,7 +148,7 @@
             <div class="widget-center">
                 {% set installed_count = stats[eq_type].get('Установленные', 0) %}
                 {% if installed_count > 0 %}
-                    <div class="central-count has-value" style="border-color: #2196f3; color: #2196f3;">
+                    <div class="central-count has-value">
                         {{ installed_count }}
                     </div>
                 {% else %}
@@ -57,4 +171,18 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // На случай, если общий обработчик .clickable-row в main.js рассчитан
+        // только на <tr> — дублируем логику здесь для всех блоков дашборда.
+        document.querySelectorAll('.dashboard [data-href]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                window.location.href = row.dataset.href;
+            });
+        });
+    });
+</script>
 {% endblock %}

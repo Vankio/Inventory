@@ -2,34 +2,29 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <script>
+        // Применяем сохранённую тему до отрисовки страницы, чтобы не было
+        // мигания светлой темой перед переключением на тёмную.
+        (function() {
+            try {
+                var theme = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Инвентаризация оборудования{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- Favicon -->
     <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
     <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
     <meta name="theme-color" content="#ffffff">
-    <script src="{{ url_for('static', filename='main.js') }}" defer></script>
-    <style>
-        .multiple-indicator {
-            font-size: 0.8em;
-            color: #888;
-            font-weight: normal;
-            margin-left: 5px;
-        }
-        .checkbox-container {
-            display: block;
-            margin-bottom: 5px;
-        }
-        .checkbox-container input {
-            margin-right: 8px;
-        }
-    </style>
+    <script src="{{ url_for('static', filename='main.js', v='2') }}" defer></script>
 </head>
 <body class="no-transition">
     <div class="sidebar">
@@ -93,6 +88,16 @@
                 <span class="nav-icon"><i class="fas fa-question-circle"></i></span>
                 <span class="nav-text">Справка</span>
             </a>
+            {% if user_session and user_session.role in ['Администратор', 'Бухгалтер', 'АДС'] %}
+            <a href="{{ url_for('accountant_history') }}" class="nav-item {% if request.path == url_for('accountant_history') %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-history"></i></span>
+                <span class="nav-text">История оборудования</span>
+            </a>
+            <a href="{{ url_for('movements_view') }}" class="nav-item {% if request.path == url_for('movements_view') %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
+                <span class="nav-text">Перемещения</span>
+            </a>
+            {% endif %}
         </nav>
         <a href="{{ url_for('archive_view') }}" class="nav-item {% if request.path == url_for('archive_view') %}active{% endif %}">
             <span class="nav-icon"><i class="fas fa-archive"></i></span>
@@ -104,11 +109,38 @@
         <button class="sidebar-toggle-main" id="sidebar-toggle-btn">
             <i class="fas fa-chevron-left"></i>
         </button>
+        {% if request.path != url_for('login') %}
+        <div class="search-container">
+            <form action="{{ url_for('search') }}" method="get" class="search-form">
+                <button type="submit" class="search-button">
+                    <i class="fas fa-search"></i>
+                </button>
+                <input type="text" name="query" placeholder="Поиск оборудования..." class="search-input" id="search-input">
+            </form>
+            <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" title="Сменить тему" aria-label="Переключить тему">
+                <i class="fas fa-moon theme-icon-moon"></i>
+                <i class="fas fa-sun theme-icon-sun"></i>
+            </button>
+        </div>
+        {% endif %}
         <div id="content-area">
             {% block content %}{% endblock %}
         </div>
     </div>
 
     {% block scripts %}{% endblock %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var toggleBtn = document.getElementById('theme-toggle-btn');
+            if (!toggleBtn) return;
+            toggleBtn.addEventListener('click', function() {
+                var current = document.documentElement.getAttribute('data-theme') || 'light';
+                var next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('theme', next); } catch (e) {}
+            });
+        });
+    </script>
 </body>
 </html>

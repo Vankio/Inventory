@@ -6,14 +6,54 @@ from flask_wtf.csrf import CSRFProtect
 import sqlite3
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jinja2 import Environment, FileSystemLoader
 from config import SECRET_KEY
+import sys
 
 
-app = Flask(__name__)
+# Determine the base path for resources (templates, static files)
+if getattr(sys, 'frozen', False):
+    # If the application is run as a bundle, the PyInstaller bootloader
+    # extends the sys module by a flag frozen=True and sets the app
+    # path into variable _MEIPASS'.
+    base_path = sys._MEIPASS
+else:
+    # If we are running in a normal Python environment, the base path
+    # is the directory where the main script is located.
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+template_folder = os.path.join(base_path, 'templates')
+static_folder = os.path.join(base_path, 'static')
+
+app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.secret_key = SECRET_KEY
 csrf = CSRFProtect(app)
+
+import logging
+from logging.handlers import RotatingFileHandler
+import traceback
+
+# Лог ошибок в файл рядом с app.py
+log_path = os.path.join(base_path, "error.log")
+handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+handler.setLevel(logging.ERROR)
+handler.setFormatter(logging.Formatter(
+    "%(asctime)s %(levelname)s %(message)s\n%(pathname)s:%(lineno)d"
+))
+app.logger.addHandler(handler)
+logging.getLogger("werkzeug").addHandler(handler)
+
+# Перехватываем все исключения и пишем полный traceback в лог
+@app.errorhandler(500)
+def handle_500(e):
+    app.logger.error("500 ERROR:\n" + traceback.format_exc())
+    return "Internal Server Error (см. error.log)", 500
+
+@app.errorhandler(Exception)
+def handle_all(e):
+    app.logger.error("UNHANDLED:\n" + traceback.format_exc())
+    return "Error (см. error.log)", 500
 
 # Пользователи
 USERS = {
@@ -22,7 +62,7 @@ USERS = {
     "prakt": {"password": 'scrypt:32768:8:1$OceYDEqcmjcx5hCJ$32dde19ac8eef6eaeff5121850e9baacfda32b68660eccf25d8bea9b9e91d7b31f6e07ccdebc467a049ae478512cb34fb698045f10a1e7d46dcaadef2d4ea594', "role": "Практикант"},
     "ADS": {"password": 'scrypt:32768:8:1$2wMs9XrNVo9VJKTy$731ab15f83868e3d8316ba93f01ea67271561bf8053b9970fe03810fdd4f219bac0829f9a565f724caf032cda5652bd89d751e70c4d41ba02e1544129e522e18', "role": "АДС"}
 }
-DB_FILE = "equipment.db"
+DB_FILE = os.path.join(base_path, "equipment.db")
 
 # Создаем окружение Jinja2 для добавления пользовательских фильтров
 env = Environment(loader=FileSystemLoader(app.template_folder))
@@ -38,6 +78,16 @@ def format_datetime_filter(value):
 
 app.jinja_env.filters['format_datetime'] = format_datetime_filter
 
+def format_date_filter(value):
+    if value is None:
+        return ""
+    # Преобразуем строку в объект datetime
+    dt_object = datetime.strptime(value, "%Y-%m-%d")
+    # Форматируем в нужный вид: ДД.ММ.ГГ
+    return dt_object.strftime("%d.%m.%y")
+
+app.jinja_env.filters['format_date'] = format_date_filter
+
 def format_component_details(component_type, details):
     """Форматирует детали компонента в читаемую строку. details может быть словарем или списком словарей."""
     if not details:
@@ -50,10 +100,14 @@ def format_component_details(component_type, details):
         "Хранение данных": ["name", "model", "capacity", "type"],
         "Видеокарта": ["name", "model", "memory"],
         "Блок питания": ["name", "model", "power"],
-        "Корпус": ["name", "model", "form_factor"]
+        "Корпус": ["name", "model", "form_factor"],
+        "Охлаждение": ["name", "model", "power_dissipation"]
     }
 
     def format_single_item(item_dict):
+        if not isinstance(item_dict, dict):
+            return str(item_dict)
+            
         parts = []
         fields_to_format = field_order.get(component_type, item_dict.keys())
         for key in fields_to_format:
@@ -67,6 +121,8 @@ def format_component_details(component_type, details):
                 elif component_type == 'Видеокарта' and key == 'memory':
                     value = f"{value} ГБ"
                 elif component_type == 'Блок питания' and key == 'power':
+                    value = f"{value} Вт"
+                elif component_type == 'Охлаждение' and key == 'power_dissipation':
                     value = f"{value} Вт"
                 parts.append(str(value))
         return " ".join(parts) if component_type == 'Процессор' else ", ".join(parts)
@@ -133,7 +189,7 @@ def format_details_filter(value):
 
 app.jinja_env.filters['format_details'] = format_details_filter
 
-PDF_UPLOAD_FOLDER = os.path.join('static', 'uploads', 'pdfs')
+PDF_UPLOAD_FOLDER = os.path.join(app.static_folder, 'uploads', 'pdfs')
 
 # Создаем папку для загрузки PDF, если ее нет
 if not os.path.exists(PDF_UPLOAD_FOLDER):
@@ -173,6 +229,10 @@ EQUIPMENT_TYPES = {
         "icon": "fas fa-box",
         "statuses": ["Резерв", "Установленные", "Сломанные", "Ремонтируются", "Списание", "Архив"]
     },
+    "Охлаждение": {
+        "icon": "fas fa-fan",
+        "statuses": ["Резерв", "Установленные", "Сломанные", "Ремонтируются", "Списание", "Архив"]
+    },
     "Мониторы": {
         "icon": "fas fa-tv",
         "statuses": ["Резерв", "Установленные", "Сломанные", "Ремонтируются", "Списание", "Архив"]
@@ -208,8 +268,8 @@ EQUIPMENT_FIELDS = {
     "Компьютеры": {
         "fields": ["name"],
         "needs_components": True,
-        "components": ["Процессор", "Оперативная память", "Хранение данных", "Материнская плата", "Видеокарта", "Блок питания", "Корпус"],
-        "multiple_components": ["Хранение данных"]
+        "components": ["Процессор", "Оперативная память", "Хранение данных", "Материнская плата", "Видеокарта", "Блок питания", "Корпус", "Охлаждение"],
+        "multiple_components": ["Хранение данных", "Оперативная память"]
     },
     "Мониторы": {
         "fields": ["name", "diagonal", "resolution"],
@@ -263,6 +323,10 @@ EQUIPMENT_FIELDS = {
         "fields": ["name", "power"],
         "needs_components": False
     },
+    "Охлаждение": {
+        "fields": ["name", "model", "power_dissipation"],
+        "needs_components": False
+    },
     "Оборудование": {
         "fields": ["name", "model"],
         "needs_components": False
@@ -270,6 +334,9 @@ EQUIPMENT_FIELDS = {
 }
 
 DEPARTMENTS = ["АДС", "АУП", "ТиС", "ГИС", "HR-отдел"]
+
+# Статусы, которые считаются "требующими внимания" на дашборде
+ATTENTION_STATUSES = ('Сломанные', 'Ремонтируются', 'Списание', 'Пустые', 'Заправляются')
 
 FIELD_LABELS = {
     'name': 'Название',
@@ -284,6 +351,7 @@ FIELD_LABELS = {
     'memory': 'Память',
     'form_factor': 'Форм-фактор',
     'power': 'Мощность',
+    'power_dissipation': 'Рассеиваемая мощность',
     'inventory_number': 'Инвентарный номер',
     'department': 'Отдел',
     'price': 'Стоимость',
@@ -294,7 +362,8 @@ FIELD_LABELS = {
     'pdf_path': 'PDF-файл',
     'archived': 'Архивация',
     'unarchived': 'Восстановление',
-    'deleted': 'Удаление'
+    'deleted': 'Удаление',
+    'purchase_date': 'Дата покупки'
 }
 
 # --- Управление базой данных ---
@@ -316,7 +385,7 @@ def close_db(e=None):
 # --- Вспомогательные функции ---
  
 def get_utc_plus6():
-    return (datetime.utcnow() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
+    return (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
  
 def log_change(equipment_id, field_name, old_value, new_value, comment=None):
     """Записывает изменение в историю."""
@@ -368,7 +437,8 @@ def parse_details_for_excel(component_type, details_json):
         "Хранение данных": ["capacity", "type"],
         "Видеокарта": ["model", "memory"],
         "Блок питания": ["power"],
-        "Корпус": ["model", "form_factor"]
+        "Корпус": ["model", "form_factor"],
+        "Охлаждение": ["model", "power_dissipation"]
     }
 
     fields_to_format = field_order.get(component_type, details_dict.keys())
@@ -389,6 +459,8 @@ def parse_details_for_excel(component_type, details_json):
             elif component_type == 'Видеокарта' and key == 'memory':
                 value = f"{value} ГБ"
             elif component_type == 'Блок питания' and key == 'power':
+                value = f"{value} Вт"
+            elif component_type == 'Охлаждение' and key == 'power_dissipation':
                 value = f"{value} Вт"
             
             formatted_data[f"{component_type} {label}"] = value
@@ -439,6 +511,9 @@ def init_db():
 
             if 'comment' not in columns:
                 cursor.execute("ALTER TABLE equipment ADD COLUMN comment TEXT")
+
+            if 'purchase_date' not in columns:
+                cursor.execute("ALTER TABLE equipment ADD COLUMN purchase_date TEXT")
                 
         else:
             # Создаем новую таблицу без недопустимого DEFAULT
@@ -455,7 +530,8 @@ def init_db():
                 pdf_path TEXT,
                 department TEXT,
                 price REAL,
-                comment TEXT
+                comment TEXT,
+                purchase_date TEXT
             )
             """)
         
@@ -473,7 +549,8 @@ def init_db():
             pdf_path TEXT,
             department TEXT,
             price REAL,
-            comment TEXT
+            comment TEXT,
+            purchase_date TEXT
         )
         """)
 
@@ -487,6 +564,8 @@ def init_db():
             cursor.execute("ALTER TABLE archived_equipment ADD COLUMN price REAL")
         if 'comment' not in archived_columns:
             cursor.execute("ALTER TABLE archived_equipment ADD COLUMN comment TEXT")
+        if 'purchase_date' not in archived_columns:
+            cursor.execute("ALTER TABLE archived_equipment ADD COLUMN purchase_date TEXT")
     
         # Создаем таблицу для истории изменений
         cursor.execute("""
@@ -584,9 +663,79 @@ def index():
                 cursor.execute("SELECT COUNT(*) FROM equipment WHERE type=? AND status=?", (eq_type, status))
             count = cursor.fetchone()[0]
             stats[eq_type][status] = count
-    
+
+    # --- Сводные показатели для карточек дашборда ---
+    cursor.execute("SELECT COUNT(*) FROM equipment")
+    total_count = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COALESCE(SUM(price), 0) FROM equipment")
+    total_value = cursor.fetchone()[0] or 0
+
+    cursor.execute("SELECT COUNT(*) FROM archived_equipment")
+    archived_count = cursor.fetchone()[0]
+
+    # "Требует внимания" — оборудование в проблемных статусах (аналог "низкого запаса")
+    placeholders = ','.join('?' for _ in ATTENTION_STATUSES)
+    cursor.execute(f"SELECT COUNT(*) FROM equipment WHERE status IN ({placeholders})", ATTENTION_STATUSES)
+    attention_count = cursor.fetchone()[0]
+
+    categories_count = len(EQUIPMENT_TYPES)
+
+    cursor.execute(f"""
+        SELECT id, type, name, status, inventory_number
+        FROM equipment
+        WHERE status IN ({placeholders})
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, ATTENTION_STATUSES)
+    attention_items = cursor.fetchall()
+
+    # --- Последние операции (для виджета на дашборде) ---
+    cursor.execute("""
+        SELECT
+            h.id,
+            h.equipment_id,
+            h.field_name,
+            h.old_value,
+            h.new_value,
+            h.change_date,
+            COALESCE(e.name, a.name) as equipment_name,
+            COALESCE(e.type, a.type) as equipment_type,
+            e.id as active_id
+        FROM history h
+        LEFT JOIN equipment e ON h.equipment_id = e.id
+        LEFT JOIN archived_equipment a ON h.equipment_id = a.id
+        ORDER BY h.change_date DESC
+        LIMIT 6
+    """)
+    recent_activity = cursor.fetchall()
+
     return render_template("index.html", equipment_types=EQUIPMENT_TYPES,
-                         equipment_fields=EQUIPMENT_FIELDS, stats=stats)
+                         equipment_fields=EQUIPMENT_FIELDS, stats=stats,
+                         total_count=total_count, total_value=total_value,
+                         archived_count=archived_count, attention_count=attention_count,
+                         categories_count=categories_count, recent_activity=recent_activity,
+                         attention_items=attention_items, field_labels=FIELD_LABELS)
+
+@app.route('/attention')
+@login_required
+def attention_view():
+    """Полный список оборудования в проблемных статусах (со всех категорий)."""
+    db = get_db()
+    cursor = db.cursor()
+
+    placeholders = ','.join('?' for _ in ATTENTION_STATUSES)
+    cursor.execute(f"""
+        SELECT id, type, name, status, inventory_number, department, price, created_at
+        FROM equipment
+        WHERE status IN ({placeholders})
+        ORDER BY created_at DESC
+    """, ATTENTION_STATUSES)
+    items = cursor.fetchall()
+
+    return render_template("attention.html", items=items,
+                         equipment_types=EQUIPMENT_TYPES,
+                         equipment_fields=EQUIPMENT_FIELDS)
 
 def get_next_local_id(db, eq_type):
     """Получает следующий локальный ID для категории"""
@@ -614,6 +763,7 @@ def add_equipment(category=None):
         department = request.form.get('department', '') # Получаем отдел
         price = request.form.get('price', None) # Получаем стоимость
         comment = request.form.get('comment', '') # Получаем комментарий
+        purchase_date = request.form.get('purchase_date', None)
         if price:
             try:
                 price = float(price)
@@ -691,9 +841,9 @@ def add_equipment(category=None):
         details = json.dumps(details_dict, ensure_ascii=False) if details_dict else ''
         
         cursor.execute("""
-            INSERT INTO equipment (type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (eq_type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment))
+            INSERT INTO equipment (type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment, purchase_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (eq_type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment, purchase_date))
 
         new_id = cursor.lastrowid
         
@@ -712,7 +862,7 @@ def add_equipment(category=None):
     pre_selected_type = category if category and category in EQUIPMENT_TYPES else None
     return render_template("add_edit.html", equipment_types=EQUIPMENT_TYPES,
                          equipment_fields=EQUIPMENT_FIELDS, pre_selected_type=pre_selected_type,
-                         departments=DEPARTMENTS)
+                         departments=DEPARTMENTS, field_labels=FIELD_LABELS)
 
 @app.route('/category/<category>')
 @login_required
@@ -743,7 +893,7 @@ def category_view(category):
     db.commit()
 
     # --- Фильтрация ---
-    base_query = "SELECT id, type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment FROM equipment WHERE type=?"
+    base_query = "SELECT id, type, name, status, details, inventory_number, local_id, created_at, pdf_path, department, price, comment, purchase_date FROM equipment WHERE type=?"
     params = [category]
 
     if selected_department != 'all':
@@ -756,14 +906,65 @@ def category_view(category):
 
     cursor.execute(base_query, params)
     items = cursor.fetchall()
-    
+
+    # Получаем историю перемещений для всех предметов в этой категории
+    item_ids = [item['id'] for item in items]
+    movements = {}
+    if item_ids:
+        placeholders = ','.join('?' for _ in item_ids)
+        
+        # Получаем историю по отделам и статусам
+        cursor.execute(f"""
+            SELECT equipment_id, field_name, old_value, new_value, change_date
+            FROM history
+            WHERE equipment_id IN ({placeholders}) AND (field_name = 'department' OR (field_name = 'status' AND (old_value = 'Резерв' OR new_value = 'Резерв')))
+            ORDER BY change_date DESC
+        """, item_ids)
+        history_records = cursor.fetchall()
+        
+        # Получаем текущий отдел для каждого предмета
+        cursor.execute(f"SELECT id, department FROM equipment WHERE id IN ({placeholders})", item_ids)
+        current_departments = {row['id']: row['department'] for row in cursor.fetchall()}
+
+        processed_ids = set()
+        for record in history_records:
+            eq_id = record['equipment_id']
+            if eq_id in processed_ids:
+                continue
+
+            field = record['field_name']
+            old_val = record['old_value']
+            new_val = record['new_value']
+            
+            movement_str = ""
+            if field == 'department':
+                old_loc = old_val or 'Без отдела'
+                new_loc = new_val or 'Без отдела'
+                if old_loc != new_loc:
+                    movement_str = f"{old_loc} -> {new_loc}"
+            elif field == 'status':
+                current_dept = current_departments.get(eq_id, '')
+                if new_val == 'Резерв':
+                    # При перемещении в резерв, старым местоположением считаем текущий отдел (который был до перемещения)
+                    # или старый статус, если отдела не было.
+                    from_loc = current_dept or old_val
+                    movement_str = f"{from_loc} -> Резерв"
+                elif old_val == 'Резерв':
+                    # При перемещении из резерва, новым местоположением считаем текущий отдел.
+                    to_loc = current_dept or new_val
+                    movement_str = f"Резерв -> {to_loc}"
+
+            if movement_str:
+                movements[eq_id] = movement_str
+                processed_ids.add(eq_id)
+
     # Для компьютеров загружаем информацию о комплектующих
     if category == "Компьютеры" and EQUIPMENT_FIELDS.get("Компьютеры", {}).get("needs_components"):
         components_info = {}
         for item in items:
             # Парсим details для получения компонентов
             item_dict_temp = {}
-            for i, col_name in enumerate(['id', 'type', 'name', 'status', 'details', 'inventory_number', 'local_id', 'created_at', 'pdf_path', 'department', 'price', 'comment']):
+            for i, col_name in enumerate(['id', 'type', 'name', 'status', 'details', 'inventory_number', 'local_id', 'created_at', 'pdf_path', 'department', 'price', 'comment', 'purchase_date']):
                 if col_name in db_columns and i < len(item):
                     item_dict_temp[col_name] = item[i]
             
@@ -810,7 +1011,7 @@ def category_view(category):
         available_components = {}
     
     # Определяем порядок колонок (явно указан в SELECT)
-    columns = ['id', 'type', 'name', 'status', 'details', 'inventory_number', 'local_id', 'created_at', 'pdf_path', 'department', 'price', 'comment']
+    columns = ['id', 'type', 'name', 'status', 'details', 'inventory_number', 'local_id', 'created_at', 'pdf_path', 'department', 'price', 'comment', 'purchase_date']
     # Берем только те колонки, которые есть в БД
     actual_columns = [col for col in columns if col in db_columns]
     
@@ -827,6 +1028,9 @@ def category_view(category):
             else:
                 item_dict[col_name] = None
         
+        # Добавляем информацию о перемещении
+        item_dict['movement'] = movements.get(item_dict['id'], '')
+        
         # Инициализируем отсутствующие поля
         if 'inventory_number' not in item_dict:
             item_dict['inventory_number'] = None
@@ -838,6 +1042,8 @@ def category_view(category):
             item_dict['price'] = None
         if 'comment' not in item_dict:
             item_dict['comment'] = None
+        if 'purchase_date' not in item_dict:
+            item_dict['purchase_date'] = None
         
         # Очищаем name от JSON, если он там случайно попал
         if item_dict.get('name') and isinstance(item_dict['name'], str) and item_dict['name'].strip().startswith('{'):
@@ -901,7 +1107,8 @@ def category_view(category):
                            selected_department=selected_department,
                            selected_status=selected_status,
                            components_list_json=json.dumps(components_list),
-                           is_component_category=is_component_category)
+                           is_component_category=is_component_category,
+                           field_labels=FIELD_LABELS)
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -912,12 +1119,12 @@ def edit_equipment(id):
     
     if request.method == 'POST':
         # Получаем старые данные перед обновлением для логирования
-        cursor.execute("SELECT type, name, status, details, inventory_number, pdf_path, department, price, comment FROM equipment WHERE id=?", (id,))
+        cursor.execute("SELECT type, name, status, details, inventory_number, pdf_path, department, price, comment, purchase_date FROM equipment WHERE id=?", (id,))
         old_item_data = cursor.fetchone()
         if not old_item_data:
             return redirect(url_for('index'))
             
-        old_type, old_name, old_status, old_details, old_inventory_number, old_pdf_path, old_department, old_price, old_comment = old_item_data
+        old_type, old_name, old_status, old_details, old_inventory_number, old_pdf_path, old_department, old_price, old_comment, old_purchase_date = old_item_data
 
         eq_type = request.form['type']
         name = request.form.get('name', '')
@@ -927,6 +1134,7 @@ def edit_equipment(id):
         department = request.form.get('department', '') # Получаем отдел
         price = request.form.get('price', None) # Получаем стоимость
         comment = request.form.get('comment', '') # Получаем комментарий
+        purchase_date = request.form.get('purchase_date', None)
         if price:
             try:
                 price = float(price)
@@ -1044,8 +1252,10 @@ def edit_equipment(id):
 
         if pdf_file and pdf_file.filename.endswith('.pdf'):
             # Если есть старый файл, удаляем его
-            if pdf_path and os.path.exists(os.path.join('static', pdf_path)):
-                os.remove(os.path.join('static', pdf_path))
+            if pdf_path:
+                full_pdf_path = os.path.join(app.static_folder, pdf_path)
+                if os.path.exists(full_pdf_path):
+                    os.remove(full_pdf_path)
 
             # Сохраняем новый файл
             filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(pdf_file.filename)}"
@@ -1059,7 +1269,10 @@ def edit_equipment(id):
         if old_name != name:
             log_change(id, 'name', old_name, name, f'Изменено название с {old_name} на {name}')
         if old_status != status:
-            log_change(id, 'status', old_status, status, f'Изменен статус с {old_status} на {status}')
+            comment = f'Изменен статус с {old_status} на {status}'
+            if status == 'Списание':
+                comment = 'Оборудование списано'
+            log_change(id, 'status', old_status, status, comment)
         if old_inventory_number != inventory_number:
             log_change(id, 'inventory_number', old_inventory_number, inventory_number, f'Изменен инвентарный номер с {old_inventory_number} на {inventory_number}')
         if old_pdf_path != pdf_path:
@@ -1076,6 +1289,8 @@ def edit_equipment(id):
             old_c = f'"{old_comment}"' if old_comment else 'None'
             new_c = f'"{comment}"' if comment else 'None'
             log_change(id, 'comment', old_comment, comment, f'Изменен комментарий с {old_c} на {new_c}')
+        if old_purchase_date != purchase_date:
+            log_change(id, 'purchase_date', old_purchase_date, purchase_date, f'Изменена дата покупки с {old_purchase_date} на {purchase_date}')
         # Сравниваем old_details и new_details более гранулярно
         try:
             old_details_dict = json.loads(old_details) if old_details else {}
@@ -1117,15 +1332,15 @@ def edit_equipment(id):
                 log_change(id, 'details', old_details, details, 'Изменены детали оборудования')
 
 
-        cursor.execute("UPDATE equipment SET type=?, name=?, status=?, details=?, inventory_number=?, pdf_path=?, department=?, price=?, comment=? WHERE id=?",
-                      (eq_type, name, status, details, inventory_number, pdf_path, department, price, comment, id))
+        cursor.execute("UPDATE equipment SET type=?, name=?, status=?, details=?, inventory_number=?, pdf_path=?, department=?, price=?, comment=?, purchase_date=? WHERE id=?",
+                      (eq_type, name, status, details, inventory_number, pdf_path, department, price, comment, purchase_date, id))
         db.commit()
         
         # Редирект на страницу НОВОЙ категории
         return redirect(url_for('category_view', category=eq_type))
     
     # GET запрос - показываем форму редактирования
-    cursor.execute("SELECT id, type, name, status, details, inventory_number, pdf_path, department, price, comment FROM equipment WHERE id=?", (id,))
+    cursor.execute("SELECT id, type, name, status, details, inventory_number, pdf_path, department, price, comment, purchase_date FROM equipment WHERE id=?", (id,))
     item = cursor.fetchone()
     
     if not item:
@@ -1141,7 +1356,8 @@ def edit_equipment(id):
         'pdf_path': item[6] or '',
         'department': item[7] or '',
         'price': item[8] if item[8] is not None else '',
-        'comment': item[9] or ''
+        'comment': item[9] or '',
+        'purchase_date': item[10] or ''
     }
     
     # Парсим details
@@ -1186,7 +1402,7 @@ def edit_equipment(id):
     return render_template("add_edit.html", equipment_types=EQUIPMENT_TYPES,
                          equipment_fields=EQUIPMENT_FIELDS,
                          edit_item=item_dict, is_edit=True,
-                         departments=DEPARTMENTS)
+                         departments=DEPARTMENTS, field_labels=FIELD_LABELS)
 @app.route('/view/<int:id>')
 @login_required
 def view_equipment(id):
@@ -1218,7 +1434,7 @@ def view_equipment(id):
                 if not comp_ids: continue
 
                 placeholders = ','.join('?' for _ in comp_ids)
-                cursor.execute(f"SELECT id, name, details FROM equipment WHERE id IN ({placeholders})", comp_ids)
+                cursor.execute(f"SELECT id, name, details, purchase_date FROM equipment WHERE id IN ({placeholders})", comp_ids)
                 all_comp_data = cursor.fetchall()
                 if not all_comp_data: continue
 
@@ -1231,7 +1447,7 @@ def view_equipment(id):
 
                     comp_name = comp_data['name'] or f'ID: {comp_id}'
                     comp_details_json = comp_data['details'] or '{}'
-                    comp_info = {'name': comp_name, 'id': comp_id}
+                    comp_info = {'name': comp_name, 'id': comp_id, 'purchase_date': comp_data['purchase_date']}
                     try:
                         comp_details_parsed = json.loads(comp_details_json)
                         comp_info['formatted_details'] = format_component_details(comp_type, comp_details_parsed)
@@ -1358,7 +1574,11 @@ def update_status(id):
 
         # Обновляем статус основного элемента
         cursor.execute("UPDATE equipment SET status=? WHERE id=?", (new_status, id))
-        log_change(id, 'status', old_status, new_status, f'Статус изменен с {old_status} на {new_status}') # Логируем изменение статуса
+        
+        comment = f'Статус изменен с {old_status} на {new_status}'
+        if new_status == 'Списание':
+            comment = 'Оборудование списано'
+        log_change(id, 'status', old_status, new_status, comment) # Логируем изменение статуса
 
         # Если это компьютер, обновляем статус его компонентов на такой же, как у компьютера
         if item_type == "Компьютеры" and item_details:
@@ -1515,7 +1735,7 @@ def export_excel(category):
 
         preferred_order = [
             "Процессор", "Оперативная память", "Хранение данных",
-            "Материнская плата", "Блок питания", "Корпус"
+            "Материнская плата", "Блок питания", "Корпус", "Охлаждение"
         ]
 
         for comp_id, name, inv_number, details_json, status, local_id, department, comp_price in computers:
@@ -1711,6 +1931,58 @@ def archive_view():
     cursor.execute(base_query, params)
     equipment = [dict(zip([column[0] for column in cursor.description], row)) for row in cursor.fetchall()]
 
+    # Получаем историю перемещений для всех предметов в архиве
+    item_ids = [item['id'] for item in equipment]
+    movements = {}
+    if item_ids:
+        placeholders = ','.join('?' for _ in item_ids)
+        
+        # Получаем историю по отделам и статусам
+        cursor.execute(f"""
+            SELECT equipment_id, field_name, old_value, new_value, change_date
+            FROM history
+            WHERE equipment_id IN ({placeholders}) AND (field_name = 'department' OR (field_name = 'status' AND (old_value = 'Резерв' OR new_value = 'Резерв')))
+            ORDER BY change_date DESC
+        """, item_ids)
+        history_records = cursor.fetchall()
+        
+        # Получаем текущий (заархивированный) отдел для каждого предмета
+        cursor.execute(f"SELECT id, department FROM archived_equipment WHERE id IN ({placeholders})", item_ids)
+        current_departments = {row['id']: row['department'] for row in cursor.fetchall()}
+
+        processed_ids = set()
+        for record in history_records:
+            eq_id = record['equipment_id']
+            if eq_id in processed_ids:
+                continue
+
+            field = record['field_name']
+            old_val = record['old_value']
+            new_val = record['new_value']
+            
+            movement_str = ""
+            if field == 'department':
+                old_loc = old_val or 'Без отдела'
+                new_loc = new_val or 'Без отдела'
+                if old_loc != new_loc:
+                    movement_str = f"{old_loc} -> {new_loc}"
+            elif field == 'status':
+                current_dept = current_departments.get(eq_id, '')
+                if new_val == 'Резерв':
+                    from_loc = current_dept or old_val
+                    movement_str = f"{from_loc} -> Резерв"
+                elif old_val == 'Резерв':
+                    to_loc = current_dept or new_val
+                    movement_str = f"Резерв -> {to_loc}"
+
+            if movement_str:
+                movements[eq_id] = movement_str
+                processed_ids.add(eq_id)
+
+    # Добавляем информацию о перемещении к каждому элементу
+    for item in equipment:
+        item['movement'] = movements.get(item['id'], '')
+
     # Получаем все возможные статусы из основной таблицы для фильтра
     cursor.execute("SELECT DISTINCT status FROM equipment UNION SELECT DISTINCT status FROM archived_equipment")
     all_statuses = [row[0] for row in cursor.fetchall() if row[0]]
@@ -1778,6 +2050,9 @@ def history_view(equipment_id):
             except (json.JSONDecodeError, TypeError):
                 old_value_formatted = old_value
                 new_value_formatted = new_value
+        elif field_name == 'purchase_date':
+            old_value_formatted = format_date_filter(old_value) if old_value else ''
+            new_value_formatted = format_date_filter(new_value) if new_value else ''
         else:
             old_value_formatted = old_value
             new_value_formatted = new_value
@@ -1803,6 +2078,45 @@ def history_view(equipment_id):
                           )
 
 
+@app.route('/accountant_history')
+@login_required
+@role_required(['Администратор', 'Бухгалтер', 'АДС'])
+def accountant_history():
+    """Отображает историю добавлений и списаний для бухгалтера."""
+    db = get_db()
+    cursor = db.cursor()
+
+    # Запрос для получения истории добавлений и списаний
+    # Мы объединяем history с equipment, чтобы получить название и инвентарный номер
+    # Используем LEFT JOIN на случай, если оборудование было удалено, но история осталась
+    cursor.execute("""
+        SELECT
+            h.id,
+            h.equipment_id,
+            h.field_name,
+            h.new_value,
+            h.change_date,
+            h.comment,
+            COALESCE(e.name, a.name) as equipment_name,
+            COALESCE(e.type, a.type) as equipment_type,
+            COALESCE(e.inventory_number, a.inventory_number) as inventory_number
+        FROM history h
+        LEFT JOIN equipment e ON h.equipment_id = e.id
+        LEFT JOIN archived_equipment a ON h.equipment_id = a.id
+        WHERE
+            h.field_name = 'created' OR
+            (h.field_name = 'status' AND h.new_value = 'Списание')
+        ORDER BY h.change_date DESC
+    """)
+    history_records = cursor.fetchall()
+
+    return render_template("accountant_history.html",
+                           history=history_records,
+                           equipment_types=EQUIPMENT_TYPES,
+                           equipment_fields=EQUIPMENT_FIELDS,
+                           field_labels=FIELD_LABELS)
+
+
 @app.route('/update_history_comment/<int:history_id>', methods=['POST'])
 @login_required
 @role_required(['Администратор', 'Бухгалтер'])
@@ -1817,6 +2131,99 @@ def update_history_comment(history_id):
     except Exception as e:
         db.rollback()
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/search')
+@login_required
+def search():
+    query = request.args.get('query', '')
+    sort_by = request.args.get('sort_by', 'id')
+    sort_order = request.args.get('sort_order', 'asc')
+
+    if not query:
+        return redirect(url_for('index'))
+    
+    query_lower = query.lower()
+
+    db = get_db()
+    cursor = db.cursor()
+
+    # Fetch all data and filter in Python
+    cursor.execute("SELECT id, type, name, status, details, inventory_number, department, price, comment, purchase_date FROM equipment WHERE status != 'Архив'")
+    all_equipment = cursor.fetchall()
+
+    cursor.execute("SELECT id, type, name, status, details, inventory_number, department, price, comment, purchase_date, 'archived' as source FROM archived_equipment")
+    all_archived = cursor.fetchall()
+
+    results = []
+    archived_results = []
+
+    for item in all_equipment:
+        item_dict = dict(item)
+        if (
+            (item_dict.get('name') and query_lower in str(item_dict['name']).lower()) or
+            (item_dict.get('inventory_number') and query_lower in str(item_dict['inventory_number']).lower()) or
+            (item_dict.get('details') and query_lower in str(item_dict['details']).lower()) or
+            (item_dict.get('comment') and query_lower in str(item_dict['comment']).lower()) or
+            (item_dict.get('department') and query_lower in str(item_dict['department']).lower()) or
+            (item_dict.get('status') and query_lower in str(item_dict['status']).lower()) or
+            (item_dict.get('type') and query_lower in str(item_dict['type']).lower()) or
+            (item_dict.get('purchase_date') and query_lower in str(item_dict['purchase_date']).lower())
+        ):
+            results.append(item_dict)
+
+    for item in all_archived:
+        item_dict = dict(item)
+        if (
+            (item_dict.get('name') and query_lower in str(item_dict['name']).lower()) or
+            (item_dict.get('inventory_number') and query_lower in str(item_dict['inventory_number']).lower()) or
+            (item_dict.get('details') and query_lower in str(item_dict['details']).lower()) or
+            (item_dict.get('comment') and query_lower in str(item_dict['comment']).lower()) or
+            (item_dict.get('department') and query_lower in str(item_dict['department']).lower()) or
+            (item_dict.get('type') and query_lower in str(item_dict['type']).lower()) or
+            (item_dict.get('purchase_date') and query_lower in str(item_dict['purchase_date']).lower())
+        ):
+            archived_results.append(item_dict)
+
+    # Sorting logic
+    reverse = sort_order == 'desc'
+
+    def sort_key(item):
+        value = item.get(sort_by)
+        
+        # Handle None values to avoid sorting errors
+        if value is None:
+            if sort_by == 'id' or sort_by == 'price': # Numeric types
+                return float('-inf') if not reverse else float('inf')
+            if sort_by == 'purchase_date': # Date type
+                return datetime.min if not reverse else datetime.max
+            return "" # String types
+
+        # Handle type-specific comparison
+        if sort_by == 'purchase_date' and isinstance(value, str):
+            try:
+                return datetime.strptime(value, '%Y-%m-%d')
+            except ValueError:
+                return datetime.min # Fallback for bad date format
+        
+        if isinstance(value, str):
+            return value.lower()
+            
+        return value
+
+    results.sort(key=sort_key, reverse=reverse)
+    archived_results.sort(key=sort_key, reverse=reverse)
+            
+    return render_template('search.html', 
+                           results=results, 
+                           archived_results=archived_results,
+                           query=query, 
+                           sort_by=sort_by,
+                           sort_order=sort_order,
+                           equipment_types=EQUIPMENT_TYPES, 
+                           equipment_fields=EQUIPMENT_FIELDS,
+                           field_labels=FIELD_LABELS,
+                           is_component_category=False)
 
 
 @app.route('/cleanup_history')
@@ -1870,8 +2277,65 @@ def cleanup_history():
     flash('Очистка истории завершена.', 'info')
     return redirect(url_for('index'))
 
+@app.route('/movements')
+@login_required
+@role_required(['Администратор', 'Бухгалтер', 'АДС'])
+def movements_view():
+    """Рендерит страницу истории перемещений."""
+    db = get_db()
+    cursor = db.cursor()
+
+    # Получаем историю по отделам и статусам
+    cursor.execute("""
+        SELECT
+            h.equipment_id,
+            h.field_name,
+            h.old_value,
+            h.new_value,
+            h.change_date,
+            eq.name,
+            eq.inventory_number
+        FROM history h
+        LEFT JOIN (
+            SELECT id, name, inventory_number FROM equipment
+            UNION ALL
+            SELECT id, name, inventory_number FROM archived_equipment
+        ) eq ON h.equipment_id = eq.id
+        WHERE h.field_name = 'department' OR (h.field_name = 'status' AND (h.old_value LIKE '%Резерв%' OR h.new_value LIKE '%Резерв%'))
+        ORDER BY h.change_date DESC
+    """)
+    history_records = cursor.fetchall()
+
+    processed_movements = []
+    for record in history_records:
+        field = record['field_name']
+        old_val = record['old_value']
+        new_val = record['new_value']
+        
+        movement_data = {
+            'equipment_id': record['equipment_id'],
+            'name': record['name'],
+            'inventory_number': record['inventory_number'],
+            'change_date': record['change_date'],
+        }
+
+        if field == 'department':
+            movement_data['type'] = 'Перемещение отдела'
+            movement_data['old_value'] = old_val or 'Без отдела'
+            movement_data['new_value'] = new_val or 'Без отдела'
+        elif field == 'status':
+            movement_data['type'] = 'Смена статуса'
+            movement_data['old_value'] = old_val
+            movement_data['new_value'] = new_val
+
+        if movement_data.get('old_value') != movement_data.get('new_value'):
+            processed_movements.append(movement_data)
+    
+    return render_template("movements.html",
+                           movements=processed_movements,
+                           equipment_types=EQUIPMENT_TYPES,
+                           equipment_fields=EQUIPMENT_FIELDS,
+                           is_component_category=False)
+
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0')
-
-
-
+    app.run(debug=False, host='192.168.0.112', port=4399)
